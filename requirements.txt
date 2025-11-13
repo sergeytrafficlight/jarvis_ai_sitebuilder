@@ -1,0 +1,5 @@
+Django
+social-auth-app-django
+mysqlclient
+Pillow
+playwright
