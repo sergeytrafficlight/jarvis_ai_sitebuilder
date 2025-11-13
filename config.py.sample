@@ -14,5 +14,10 @@ MARIADB = {
 # Base site URL (adjust if you deploy elsewhere)
 SITE_URL = os.getenv("SITE_URL", "http://localhost:8000")
 
+GOOGLE_OAUTH = {
+    "CLIENT_ID": os.getenv("GOOGLE_CLIENT_ID", ""),
+    "CLIENT_SECRET": os.getenv("GOOGLE_CLIENT_SECRET", ""),
+}
+
 DIR_USER_PREFIX = 'users'
 DIR_IMAGES_PREFIX = 'imgs'
