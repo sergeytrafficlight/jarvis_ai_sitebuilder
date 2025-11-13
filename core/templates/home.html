@@ -1,0 +1,12 @@
+{% extends 'base.html' %}
+{% load i18n %}
+{% block title %}{% trans "Добро пожаловать" %}{% endblock %}
+{% block content %}
+<div class="hero">
+    <h1>{% trans "AI генерация лендингов" %}</h1>
+    <p>{% trans "Войдите через Google, чтобы начать." %}</p>
+    <a class="btn btn-google" href="{% url 'social:begin' 'google-oauth2' %}?next={% url 'dashboard' %}">
+        {% trans "Войти с Google" %}
+    </a>
+</div>
+{% endblock %}

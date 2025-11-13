@@ -1,0 +1,62 @@
+{% load i18n %}
+<!-- Modal: Создать сайт -->
+<div class="modal-overlay" id="{{modal_id}}">
+    <div class="modal">
+        <div class="modal-header">
+            <h3>Создать сайт</h3>
+            <button class="modal-close" id="createModalCloseBtn" aria-label="{% trans 'Закрыть' %}">✕</button>
+        </div>
+        <div class="modal-body two-columns">
+            <div class="modal-left">
+                <div class="form-group">
+                    <label for="refUrl"><strong>{% trans "Укажите референс-сайт" %}:</strong></label>
+                    <input type="url" id="refUrl" placeholder="https://example.com" />
+                    <div class="hint" id="refHint">{% trans "Референс-сайт не используется" %}</div>
+                    <div class="hint muted">{% trans "Подсказка: Данный сайт будет использоваться как пример для дальнейшей работы (необязательное поле)" %}</div>
+                </div>
+
+                <div class="form-group">
+                    <label for="taskPrompt"><strong>{% trans "Что нужно сделать" %}</strong></label>
+                    <textarea id="taskPrompt" rows="7" placeholder="{% trans 'Опишите, какой сайт нужно сгенерировать...'%}"></textarea>
+                </div>
+
+                <div class="form-group inline">
+                    <label for="siteCount"><strong>{% trans "Количество сайтов" %}</strong></label>
+                    <input type="number" id="siteCount" value="1" min="1" />
+                </div>
+            </div>
+
+            <div class="modal-right">
+                <div class="screenshot-box" id="screenshotBox">
+                    <img id="refPreview" alt="{% trans 'Превью референс-сайта' %}" />
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-primary" id="startCreateBtn">{% trans 'Запустить создание 1 сайта' %}</button>
+            <button class="btn btn-secondary" id="cancelCreateBtn">{% trans 'Отмена' %}</button>
+        </div>
+    </div>
+</div>
+
+<script>
+
+function {{modal_id}}_open() {
+    console.log("open modal");
+    const modal = document.getElementById('{{modal_id}}');
+    modal.classList.add('active');
+}
+
+function {{modal_id}}_close() {
+    const modal = document.getElementById('{{modal_id}}');
+    modal.classList.remove('active');
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const close_btn_head = document.getElementById('createModalCloseBtn');
+    close_btn_head.addEventListener('click', (e) => { if (e.target === close_btn_head) {{modal_id}}_close(); });
+    const cancel_btn_botton = document.getElementById("cancelCreateBtn");
+    cancel_btn_botton.addEventListener('click', (e) => { if (e.target === cancel_btn_botton) {{modal_id}}_close(); });
+});
+
+</script>

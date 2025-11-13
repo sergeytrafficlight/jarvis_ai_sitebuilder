@@ -1,0 +1,18 @@
+import os
+
+# External services configuration
+# Fill these values before running the project
+
+MARIADB = {
+    "NAME": os.getenv("DB_NAME", "jarvis_ai_sitebuilder"),
+    "USER": os.getenv("DB_USER", "jarvis_ai_sitebuilder"),
+    "PASSWORD": os.getenv("DB_PASSWORD", ""),
+    "HOST": os.getenv("DB_HOST", "127.0.0.1"),
+    "PORT": os.getenv("DB_PORT", "3306"),
+}
+
+# Base site URL (adjust if you deploy elsewhere)
+SITE_URL = os.getenv("SITE_URL", "http://localhost:8000")
+
+DIR_USER_PREFIX = 'users'
+DIR_IMAGES_PREFIX = 'imgs'

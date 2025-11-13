@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+{% load i18n %}
+{% get_current_language as LANGUAGE_CODE %}
+<html lang="{{ LANGUAGE_CODE }}">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{% block title %}AI Site Builder{% endblock %}</title>
+    <link rel="stylesheet" href="/static/css/styles.css" />
+</head>
+<body>
+    <header class="site-header">
+        <div class="container header-inner">
+            <div class="brand"><a href="/">AI Site Builder</a></div>
+            {% if request.user.is_authenticated %}
+            <nav class="nav">
+                <a href="/dashboard/">{% trans "Дашборд" %}</a>
+                <a href="/billing/">{% trans "История биллинга" %}</a>
+                <a class="btn btn-primary" href="/topup/">{% trans "Пополнить" %}</a>
+            </nav>
+            <div class="user-info">
+                <span class="user-email">{{ request.user.email|default:request.user.username }}</span>
+                <a class="btn btn-secondary" href="/logout/">{% trans "Выйти" %}</a>
+            </div>
+            {% endif %}
+            <form method="post" action="{% url 'set_language' %}" style="margin-left:12px;">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                <select name="language" onchange="this.form.submit()">
+                    <option value="ru" {% if LANGUAGE_CODE|slice:":2" == "ru" %}selected{% endif %}>RU</option>
+                    <option value="en" {% if LANGUAGE_CODE|slice:":2" == "en" %}selected{% endif %}>EN</option>
+                </select>
+            </form>
+        </div>
+    </header>
+
+    <main class="container">
+        {% if messages %}
+            <div class="messages">
+                {% for message in messages %}
+                    <div class="message {{ message.tags }}">{{ message }}</div>
+                {% endfor %}
+            </div>
+        {% endif %}
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="site-footer">
+        <div class="container">© {% now "Y" %} AI Site Builder</div>
+    </footer>
+</body>
+</html>

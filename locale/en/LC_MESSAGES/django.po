@@ -1,0 +1,152 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: AI Site Builder 1.0\n"
+"Language: en\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: core/templates/home.html
+msgid "Добро пожаловать"
+msgstr "Welcome"
+
+#: core/templates/home.html
+msgid "AI генерация лендингов"
+msgstr "AI landing page generation"
+
+#: core/templates/home.html
+msgid "Войдите через Google, чтобы начать."
+msgstr "Sign in with Google to start."
+
+#: core/templates/home.html
+msgid "Войти с Google"
+msgstr "Sign in with Google"
+
+#: core/templates/base.html core/templates/dashboard.html
+msgid "Дашборд"
+msgstr "Dashboard"
+
+#: core/templates/base.html
+msgid "История биллинга"
+msgstr "Billing history"
+
+#: core/templates/base.html core/templates/dashboard.html
+msgid "Пополнить"
+msgstr "Top up"
+
+#: core/templates/base.html
+msgid "Выйти"
+msgstr "Log out"
+
+#: core/templates/dashboard.html
+msgid "Текущий баланс"
+msgstr "Current balance"
+
+#: core/templates/dashboard.html
+msgid "Ваши сайты"
+msgstr "Your sites"
+
+#: core/templates/dashboard.html
+msgid "Название"
+msgstr "Name"
+
+#: core/templates/dashboard.html
+msgid "Статус"
+msgstr "Status"
+
+#: core/templates/dashboard.html
+msgid "Создан"
+msgstr "Created"
+
+#: core/templates/dashboard.html
+msgid "Пока нет созданных сайтов. Функционал будет добавлен позже."
+msgstr "No sites yet. Functionality will be added later."
+0
+#: core/templates/billing_history.html
+msgid "История операций"
+msgstr "Operations history"
+
+#: core/templates/billing_history.html
+msgid "Дата"
+msgstr "Date"
+
+#: core/templates/billing_history.html
+msgid "Тип"
+msgstr "Type"
+
+#: core/templates/billing_history.html
+msgid "Сумма (USD)"
+msgstr "Amount (USD)"
+
+#: core/templates/billing_history.html
+msgid "Описание"
+msgstr "Description"
+
+#: core/templates/billing_history.html
+msgid "Операций пока нет."
+msgstr "No operations yet."
+
+#: core/templates/topup.html
+msgid "Пополнение баланса"
+msgstr "Balance top-up"
+
+#: core/templates/topup.html
+msgid "Перейти к оплате"
+msgstr "Proceed to payment"
+
+#: core/templates/topup.html
+msgid "После нажатия произойдёт переход на платёжный шлюз (заглушка)."
+msgstr "After clicking you will be redirected to the payment gateway (placeholder)."
+
+#: core/templates/payment_redirect.html
+msgid "Платёжный шлюз"
+msgstr "Payment gateway"
+
+#: core/templates/payment_redirect.html
+msgid "Переход к оплате"
+msgstr "Redirecting to payment"
+
+#: core/templates/payment_redirect.html
+msgid "Сейчас вы будете перенаправлены на платёжный шлюз."
+msgstr "You are about to be redirected to the payment gateway."
+
+#: core/templates/payment_redirect.html
+msgid "Сумма к оплате:"
+msgstr "Amount to pay:"
+
+#: core/templates/payment_redirect.html
+msgid "Интеграция с реальным шлюзом будет добавлена позже."
+msgstr "Integration with a real gateway will be added later."
+
+#: core/templates/payment_redirect.html
+msgid "Вернуться в дашборд"
+msgstr "Back to dashboard"
+
+#: core/views.py
+msgid "Пожалуйста, исправьте ошибки в форме."
+msgstr "Please correct the errors in the form."
+
+#: core/views.py
+msgid "Сумма пополнения (USD)"
+msgstr "Top-up amount (USD)"
+
+#: core/models.py
+msgid "Пополнение"
+msgstr "Top-up"
+
+#: core/models.py
+msgid "Списание"
+msgstr "Charge"
+
+#: core/models.py
+msgid "Черновик"
+msgstr "Draft"
+
+#: core/models.py
+msgid "Опубликован"
+msgstr "Published"
+
+#: core/models.py
+msgid "Архив"
+msgstr "Archived"

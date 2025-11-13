@@ -1,0 +1,66 @@
+{% extends 'base.html' %}
+{% load i18n %}
+{% block title %}{% trans "Дашборд" %}{% endblock %}
+{% block content %}
+<h2>{% trans "Дашборд" %}</h2>
+<div class="dashboard-top">
+    <div class="balance-card">
+        <div class="balance-label">{% trans "Текущий баланс" %}</div>
+        <a class="balance-value" href="{% url 'billing_history' %}">{{ profile.balance|default:"0.00" }} USD</a>
+    </div>
+    <div class="topup-action">
+        <a class="btn btn-primary" href="{% url 'topup' %}">{% trans "Пополнить" %}</a>
+    </div>
+    <div class="topup-action">
+        <button class="btn btn-primary" id="modal_create_site_open_btn_id">{% trans "Создать сайт" %}</button>
+    </div>
+
+</div>
+
+<section class="sites-section">
+    <h3>{% trans "Ваши сайты" %}</h3>
+    <div class="card">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>{% trans "Название" %}</th>
+                    <th>{% trans "Статус" %}</th>
+                    <th>{% trans "Создан" %}</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% if sites %}
+                {% for s in sites %}
+                <tr>
+                    <td>{{ s.name }}</td>
+                    <td>{{ s.get_status_display }}</td>
+                    <td>{{ s.created_at|date:"d.m.Y H:i" }}</td>
+                </tr>
+                {% endfor %}
+            {% else %}
+                <tr>
+                    <td colspan="3" class="muted">{% trans "Пока нет созданных сайтов. Функционал будет добавлен позже." %}</td>
+                </tr>
+            {% endif %}
+            </tbody>
+        </table>
+    </div>
+</section>
+
+{% include 'components/modal_create_site.html' with modal_id="modal_create_site" %}
+
+
+<script>
+
+
+document.addEventListener('DOMContentLoaded', () => {
+
+    modal_create_site_open_btn = document.getElementById('modal_create_site_open_btn_id')
+    modal_create_site_open_btn.addEventListener('click', (e) => {
+        modal_create_site_open();
+    });
+
+});
+</script>
+
+{% endblock %}

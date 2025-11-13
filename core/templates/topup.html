@@ -1,0 +1,15 @@
+{% extends 'base.html' %}
+{% load i18n %}
+{% block title %}{% trans "Пополнение баланса" %}{% endblock %}
+{% block content %}
+<h2>{% trans "Пополнение баланса" %}</h2>
+<div class="card">
+    <form method="post" class="form-inline">
+        {% csrf_token %}
+        {{ form.amount.label_tag }}
+        {{ form.amount }}
+        <button type="submit" class="btn btn-primary">{% trans "Перейти к оплате" %}</button>
+    </form>
+    <p class="muted">{% trans "После нажатия произойдёт переход на платёжный шлюз (заглушка)." %}</p>
+</div>
+{% endblock %}

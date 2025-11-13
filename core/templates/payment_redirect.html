@@ -1,0 +1,12 @@
+{% extends 'base.html' %}
+{% load i18n %}
+{% block title %}{% trans "Платёжный шлюз" %}{% endblock %}
+{% block content %}
+<h2>{% trans "Переход к оплате" %}</h2>
+<div class="card center">
+    <p>{% trans "Сейчас вы будете перенаправлены на платёжный шлюз." %}</p>
+    <p>{% trans "Сумма к оплате:" %} <strong>{{ amount }} USD</strong></p>
+    <p class="muted">{% trans "Интеграция с реальным шлюзом будет добавлена позже." %}</p>
+    <a class="btn btn-secondary" href="/dashboard/">{% trans "Вернуться в дашборд" %}</a>
+</div>
+{% endblock %}
