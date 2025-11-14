@@ -3,4 +3,6 @@ social-auth-app-django
 mysqlclient
 Pillow
 playwright
-
+redis
+celery
+django-celery-results

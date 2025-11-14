@@ -12,6 +12,7 @@
                     <label for="refUrl"><strong>{% trans "Укажите референс-сайт" %}:</strong></label>
                     <input type="url" id="refUrl" placeholder="https://example.com" />
                     <div class="hint" id="refHint">{% trans "Референс-сайт не используется" %}</div>
+                    <div class="hint error" id="refError" style="display:none;"></div>
                     <div class="hint muted">{% trans "Подсказка: Данный сайт будет использоваться как пример для дальнейшей работы (необязательное поле)" %}</div>
                 </div>
 
@@ -28,12 +29,26 @@
 
             <div class="modal-right">
                 <div class="screenshot-box" id="screenshotBox">
-                    <img id="refPreview" alt="{% trans 'Превью референс-сайта' %}" />
+                    <div class="gradient-loader" id="previewLoader" style="display:none;"></div>
+                    <div class="preview-placeholder" id="previewNotUsed" >
+                        <div class="placeholder-icon">🛈</div>
+                        <div class="placeholder-text">{% trans "Референс-сайт не используется" %}</div>
+                    </div>
+
+                    <div class="preview-placeholder error" id="previewErrorState" style="display:none;">
+                        <div class="placeholder-icon">⚠</div>
+                        <div class="placeholder-text">{% trans "Ошибка загрузки" %}</div>
+                    </div>
+
+
+                    <div class="screenshot-scroll">
+                        <img id="refPreview" alt="{% trans 'Превью референс-сайта' %}" />
+                    </div>
                 </div>
             </div>
         </div>
         <div class="modal-footer">
-            <button class="btn btn-primary" id="startCreateBtn">{% trans 'Запустить создание 1 сайта' %}</button>
+            <button class="btn btn-primary" id="startCreateBtn">{% trans 'Создать' %}</button>
             <button class="btn btn-secondary" id="cancelCreateBtn">{% trans 'Отмена' %}</button>
         </div>
     </div>
@@ -41,10 +56,114 @@
 
 <script>
 
+let ref_url_typing_timer = null;
+const ref_url_delay = 2000;
+let lastController = null;
+const imgLoading = "/static/img/loading.gif";
+const imgError = "/static/img/error.png";
+const imgNotUsed = "/static/img/not_used.png";
+
+const refPreview = document.getElementById("refPreview");
+const refError = document.getElementById("refError");
+const refHint = document.getElementById("refHint");
+
+const siteCountInput = document.getElementById("siteCount");
+const startCreateBtn = document.getElementById("startCreateBtn");
+
+
+
+
+function hideAllStates() {
+    document.getElementById("previewLoader").style.display = "none";
+    document.getElementById("previewNotUsed").style.display = "none";
+    document.getElementById("previewErrorState").style.display = "none";
+
+    // Всегда скрывать изображение
+    refPreview.style.display = "none";
+    refPreview.classList.remove("fade-in-loaded", "fade-in");
+}
+
+function loaderShow() {
+    document.getElementById("previewLoader").style.display = "block";
+    refPreview.style.opacity = "0";
+}
+
+function loaderHide() {
+    document.getElementById("previewLoader").style.display = "none";
+    refPreview.style.opacity = "1";
+}
+
+function applyState(classesToAdd, classesToRemove) {
+    classesToAdd.forEach(c => refPreview.classList.add(c));
+    classesToRemove.forEach(c => refPreview.classList.remove(c));
+}
+
+function showError(message) {
+    refError.textContent = message;
+    refError.style.display = "block";
+}
+
+function hideError() {
+    refError.style.display = "none";
+}
+
+
+function setPreviewLoading() {
+    hideError();
+    refHint.textContent = "{% trans 'Загрузка превью...' %}";
+
+    hideAllStates();
+    document.getElementById("previewLoader").style.display = "block";
+}
+
+function setPreviewNotUsed() {
+    hideError();
+    refHint.textContent = "{% trans 'Референс-сайт не используется' %}";
+
+    hideAllStates();
+    document.getElementById("previewNotUsed").style.display = "flex";
+}
+
+function setPreviewError(msg) {
+    showError(msg);
+    refHint.textContent = "{% trans 'Ошибка получения превью' %}";
+
+    // Скрываем ВСЕ
+    hideAllStates();
+
+    // Показываем плейсхолдер ошибки
+    const errBox = document.getElementById("previewErrorState");
+    errBox.style.display = "flex";
+
+    // Убираем предыдущее превью на всякий случай
+    refPreview.src = "";
+    refPreview.style.display = "none";
+}
+
+
+function setPreviewSuccess(url) {
+    hideError();
+    refHint.textContent = "";
+
+    hideAllStates();
+    refPreview.style.display = "block";
+
+    refPreview.onload = () => {
+        refPreview.classList.add("fade-in-loaded");
+    };
+
+    refPreview.src = url;
+}
+
 function {{modal_id}}_open() {
     console.log("open modal");
     const modal = document.getElementById('{{modal_id}}');
     modal.classList.add('active');
+
+    const ref_url = document.getElementById('refUrl');
+    if (!ref_url.value.trim()) {
+        setPreviewNotUsed();
+    }
 }
 
 function {{modal_id}}_close() {
@@ -52,11 +171,101 @@ function {{modal_id}}_close() {
     modal.classList.remove('active');
 }
 
+function ref_url_event() {
+    console.log("stop typing, csfr: " + getCookie("csrftoken"));
+    const ref_url = document.getElementById('refUrl');
+
+    const url = ref_url.value.trim();
+    if (!url) {
+        setPreviewNotUsed();
+        return;
+    }
+
+    setPreviewLoading();
+
+    if (lastController) lastController.abort();
+    lastController = new AbortController();
+
+
+    fetch("{% url 'reference_screenshot' %}", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "X-CSRFToken": getCookie("csrftoken")
+        },
+        body: JSON.stringify({ url }),
+        signal: lastController.signal
+    })
+    .then(resp => resp.json())
+    .then(data => {
+        if (data.status) {
+            setPreviewSuccess(data.img);
+        } else {
+            setPreviewError(data.error || "{% trans 'Ошибка генерации скриншота' %}");
+        }
+    })
+    .catch(err => {
+        if (err.name !== "AbortError") {
+            setPreviewError("{% trans 'Ошибка соединения с сервером' %}");
+        }
+    });
+}
+
+function start_site_creation() {
+
+    const payload = {
+      refUrl: document.getElementById("refUrl").value.trim(),
+      taskPrompt: document.getElementById("taskPrompt").value.trim(),
+      siteCount: parseInt(document.getElementById("siteCount").value || "1", 10),
+    };
+
+  fetch("/create_site_task/", {
+      method: "POST",
+      headers: {
+          "Content-Type": "application/json",
+          "X-CSRFToken": getCookie("csrftoken"),
+      },
+      body: JSON.stringify(payload),
+  })
+  .then(r => r.json())
+  .then(data => {
+      if (data.status) {
+        // тут нужен редирект на URL который вернет бекенд
+      } else {
+          alert(data.error || "Ошибка запуска задачи");
+      }
+  })
+  .catch(() => alert("Ошибка сети"));
+
+
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     const close_btn_head = document.getElementById('createModalCloseBtn');
     close_btn_head.addEventListener('click', (e) => { if (e.target === close_btn_head) {{modal_id}}_close(); });
     const cancel_btn_botton = document.getElementById("cancelCreateBtn");
     cancel_btn_botton.addEventListener('click', (e) => { if (e.target === cancel_btn_botton) {{modal_id}}_close(); });
+
+    const ref_url = document.getElementById('refUrl');
+
+    ref_url.addEventListener('input', () => {
+        const url = ref_url.value.trim();
+
+        if (!url) {
+            if (ref_url_typing_timer) clearTimeout(ref_url_typing_timer);
+            setPreviewNotUsed();
+            return;
+        }
+
+        if (ref_url_typing_timer) clearTimeout(ref_url_typing_timer);
+        ref_url_typing_timer = setTimeout(ref_url_event, ref_url_delay);
+    });
+
+    startCreateBtn.addEventListener("click", () => {
+        start_site_creation();
+    });
+
+
 });
 
 </script>

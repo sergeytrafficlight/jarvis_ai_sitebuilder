@@ -20,3 +20,12 @@ class SiteProjectAdmin(admin.ModelAdmin):
     list_display = ("user", "name", "status", "created_at")
     list_filter = ("status", "created_at")
     search_fields = ("name", "user__username", "user__email")
+
+
+from .models import Profile, Transaction, SiteProject, SystemPromts
+
+@admin.register(SystemPromts)
+class SystemPromtsAdmin(admin.ModelAdmin):
+  list_display = ("type", "promt")
+  search_fields = ("promt",)
+  list_filter = ("type",)

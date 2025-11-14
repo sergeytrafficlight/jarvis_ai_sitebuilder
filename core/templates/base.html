@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 {% load i18n %}
+{% load static %}
 {% get_current_language as LANGUAGE_CODE %}
 <html lang="{{ LANGUAGE_CODE }}">
 <head>
@@ -9,6 +10,9 @@
     <link rel="stylesheet" href="/static/css/styles.css" />
 </head>
 <body>
+
+    <script src="{% static 'js/tools.js' %}"></script>
+
     <header class="site-header">
         <div class="container header-inner">
             <div class="brand"><a href="/">AI Site Builder</a></div>

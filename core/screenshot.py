@@ -2,15 +2,22 @@ import asyncio
 from django.contrib.auth.models import User
 from playwright.async_api import async_playwright, TimeoutError as PWTimeoutError
 from pathlib import Path
+import time
 from urllib.parse import urlparse
 from django.utils.translation import gettext_lazy as _
 from django.core.files import File
 from core.models import GeneratedImage
 from .tools import is_valid_http_url, get_image_path_for_user
 
+from core.log import *
+logger.setLevel(logging.DEBUG)
+
+
 DEFAULT_TIMEOUT_MS = 30000
 
 async def take_full_screenshot(url: str, out_path: str, timeout: int = DEFAULT_TIMEOUT_MS, headless: bool = True, wait_after_load: float = 0.5):
+
+    logger.debug(f"take screen: {url}")
 
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -43,16 +50,19 @@ async def take_full_screenshot(url: str, out_path: str, timeout: int = DEFAULT_T
         return True, ""
 
 def generate_screenshort(u: User, url: str):
+    logger.debug(f"take url {url}")
     r, msg = is_valid_http_url(url)
     if not r:
         return r, msg
 
-    filename = f"screenshot_{u.id}_{int(asyncio.get_event_loop().time() * 1000)}.png"
+    filename = f"screenshot_{u.id}_{int(time.time() * 1000)}.png"
+
     dir = get_image_path_for_user(u)
+    dir = Path(dir)
     dir.mkdir(parents=True, exist_ok=True)
     out_path = f"{dir}/{filename}"
 
-    r, msg = take_full_screenshot(url, str(out_path))
+    r, msg = asyncio.run(take_full_screenshot(url, str(out_path)))
     if not r:
         return r, msg
 

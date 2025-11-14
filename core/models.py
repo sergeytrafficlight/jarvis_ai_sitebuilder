@@ -1,3 +1,4 @@
+
 from django.db import models
 from django.contrib.auth.models import User
 from django.db.models.signals import post_save
@@ -71,3 +72,40 @@ class GeneratedImage(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='images')
     image = models.ImageField(upload_to=image_upload_path)
     created_at = models.DateTimeField(auto_now_add=True)
+
+class SystemPromts(models.Model):
+    SP_NAME_CLASSIFICATION = "name_classification"
+    SP_CHOICES = (
+        (SP_NAME_CLASSIFICATION, _("Классификация имени сайта")),
+    )
+
+    type = models.CharField(choices=SP_CHOICES, max_length=64)
+    promt = models.TextField(blank=True)
+
+
+
+class MyTask(models.Model):
+    TASK_STATUS_CHOICES = [
+        ('PENDING', 'Pending'),
+        ('STARTED', 'Started'),
+        ('SUCCESS', 'Success'),
+        ('FAILURE', 'Failure'),
+        ('RETRY', 'Retry'),
+    ]
+
+    task_id = models.CharField(max_length=255, unique=True)
+    name = models.CharField(max_length=255)
+    status = models.CharField(max_length=20, choices=TASK_STATUS_CHOICES, default='PENDING')
+    message = models.TextField(blank=True, null=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    # Дополнительно: связь с пользователем или объектом
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='task')
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.name} ({self.task_id}) - {self.status}"

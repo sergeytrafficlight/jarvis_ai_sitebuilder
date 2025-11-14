@@ -11,6 +11,8 @@ SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "dev-" + secrets.token_urlsafe(
 DEBUG = True
 ALLOWED_HOSTS = ["*"]
 
+USER_FILES_ROOT = f"{BASE_DIR}/users"
+
 # Canonical host derived from config.SITE_URL
 _parsed = urlparse(getattr(config, "SITE_URL", "http://localhost:8000"))
 CANONICAL_SCHEME = _parsed.scheme or "http"
@@ -25,6 +27,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "social_django",
+    "django_celery_results",
     "core",
 ]
 
@@ -133,3 +136,19 @@ CSRF_TRUSTED_ORIGINS = list({
     "https://127.0.0.1:8000",
     "https://localhost:8000",
 })
+
+CELERY_BROKER_URL = "redis://localhost:6379/0"
+CELERY_RESULT_BACKEND = "django-db"
+
+CELERY_TASK_ACKS_LATE = True
+CELERY_TASK_REJECT_ON_WORKER_LOST = True
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1
+
+
+
+CELERY_TASK_TIME_LIMIT = 60 * 10  # жесткий таймаут 10 минут
+CELERY_TASK_SOFT_TIME_LIMIT = 60 * 9
+
+CELERY_TASK_SERIALIZER = "json"
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_RESULT_SERIALIZER = "json"
