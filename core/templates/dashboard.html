@@ -19,48 +19,174 @@
 
 <section class="sites-section">
     <h3>{% trans "Ваши сайты" %}</h3>
+
+    <div class="card" style="margin-bottom:10px;">
+        <button class="btn btn-secondary" id="btnSelectAll">{% trans "Выбрать все" %}</button>
+        <button class="btn btn-secondary" id="btnUnselectAll" style="margin-left:6px;">{% trans "Снять выделение" %}</button>
+        <button class="btn btn-primary" id="btnBulkDelete" style="margin-left:6px;" disabled>{% trans "Удалить выбранные" %}</button>
+    </div>
+
     <div class="card">
         <table class="table">
             <thead>
                 <tr>
+                    <th></th>
                     <th>{% trans "Название" %}</th>
                     <th>{% trans "Статус" %}</th>
                     <th>{% trans "Создан" %}</th>
+                    <th>{% trans "Действия" %}</th>
                 </tr>
             </thead>
             <tbody>
-            {% if sites %}
-                {% for s in sites %}
-                <tr>
+            {% if page_obj and page_obj.object_list %}
+                {% for s in page_obj.object_list %}
+                <tr id="site-row-{{ s.id }}">
+                    <td>
+                        <input type="checkbox" class="site-check" value="{{ s.id }}" />
+                    </td>
                     <td>{{ s.name }}</td>
                     <td>{{ s.get_status_display }}</td>
                     <td>{{ s.created_at|date:"d.m.Y H:i" }}</td>
+                    <td>
+                        <button class="btn btn-secondary btn-delete-one" data-id="{{ s.id }}">{% trans "Удалить" %}</button>
+                    </td>
                 </tr>
                 {% endfor %}
             {% else %}
                 <tr>
-                    <td colspan="3" class="muted">{% trans "Пока нет созданных сайтов. Функционал будет добавлен позже." %}</td>
+                    <td colspan="5" class="muted">{% trans "Пока нет созданных сайтов. Функционал будет добавлен позже." %}</td>
                 </tr>
             {% endif %}
             </tbody>
         </table>
     </div>
+
+    {% if page_obj and page_obj.paginator.num_pages > 1 %}
+    <div class="card" style="display:flex;gap:10px;align-items:center;justify-content:center;">
+        {% if page_obj.has_previous %}
+        <a class="btn btn-secondary" href="?page={{ page_obj.previous_page_number }}">« {% trans "Назад" %}</a>
+        {% endif %}
+        <span class="muted">{% trans "Страница" %} {{ page_obj.number }} {% trans "из" %} {{ page_obj.paginator.num_pages }}</span>
+        {% if page_obj.has_next %}
+        <a class="btn btn-secondary" href="?page={{ page_obj.next_page_number }}">{% trans "Вперёд" %} »</a>
+        {% endif %}
+    </div>
+    {% endif %}
 </section>
+
 
 {% include 'components/modal_create_site.html' with modal_id="modal_create_site" %}
 
 
 <script>
-
-
 document.addEventListener('DOMContentLoaded', () => {
+    // Кнопка открытия модалки создания
+    const modal_create_site_open_btn = document.getElementById('modal_create_site_open_btn_id');
+    if (modal_create_site_open_btn) {
+        modal_create_site_open_btn.addEventListener('click', () => { modal_create_site_open(); });
+    }
 
-    modal_create_site_open_btn = document.getElementById('modal_create_site_open_btn_id')
-    modal_create_site_open_btn.addEventListener('click', (e) => {
-        modal_create_site_open();
+    // Выбор и массовое удаление
+    const btnSelectAll   = document.getElementById('btnSelectAll');
+    const btnUnselectAll = document.getElementById('btnUnselectAll');
+    const btnBulkDelete  = document.getElementById('btnBulkDelete');
+
+    function getChecks() {
+        return Array.from(document.querySelectorAll('.site-check'));
+    }
+    function getSelectedIds() {
+        return getChecks().filter(c => c.checked).map(c => parseInt(c.value, 10));
+    }
+    function updateBulkState() {
+        const cnt = getSelectedIds().length;
+        btnBulkDelete.disabled = cnt === 0;
+    }
+
+    if (btnSelectAll) {
+        btnSelectAll.addEventListener('click', () => {
+            getChecks().forEach(c => c.checked = true);
+            updateBulkState();
+        });
+    }
+    if (btnUnselectAll) {
+        btnUnselectAll.addEventListener('click', () => {
+            getChecks().forEach(c => c.checked = false);
+            updateBulkState();
+        });
+    }
+    getChecks().forEach(c => c.addEventListener('change', updateBulkState));
+
+    async function bulkArchive(ids) {
+        const resp = await fetch("/sites/bulk_archive/", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-CSRFToken": getCookie("csrftoken"),
+            },
+            body: JSON.stringify({ ids }),
+        });
+        return resp.json();
+    }
+
+    if (btnBulkDelete) {
+        btnBulkDelete.addEventListener('click', async () => {
+            const ids = getSelectedIds();
+            if (!ids.length) return;
+
+            btnBulkDelete.disabled = true;
+            try {
+                const data = await bulkArchive(ids);
+                if (data.status) {
+                    // Самый простой: перезагрузим страницу, чтобы корректно обновить пагинацию
+                    window.location.reload();
+                } else {
+                    alert(data.error || "Ошибка удаления");
+                }
+            } catch(e) {
+                alert("Ошибка сети");
+            } finally {
+                btnBulkDelete.disabled = false;
+            }
+        });
+    }
+
+    // Одиночное удаление
+    document.querySelectorAll('.btn-delete-one').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            const id = e.currentTarget.getAttribute('data-id');
+            if (!id) return;
+            e.currentTarget.disabled = true;
+
+            try {
+                const resp = await fetch(`/sites/${id}/archive/`, {
+                    method: "POST",
+                    headers: {
+                        "X-CSRFToken": getCookie("csrftoken"),
+                    }
+                });
+                const data = await resp.json();
+                if (data.status) {
+                    // Удаляем строку из DOM и, если страницу «опустошили», перезагрузим
+                    const row = document.getElementById(`site-row-${id}`);
+                    if (row) row.remove();
+                    // Если таблица теперь пустая — просто обновим страницу (удобно при пагинации)
+                    if (!document.querySelector('.site-check')) {
+                        window.location.reload();
+                    } else {
+                        updateBulkState();
+                    }
+                } else {
+                    alert(data.error || "Ошибка удаления");
+                }
+            } catch (err) {
+                alert("Ошибка сети");
+            } finally {
+                e.currentTarget.disabled = false;
+            }
+        });
     });
-
 });
 </script>
+
 
 {% endblock %}

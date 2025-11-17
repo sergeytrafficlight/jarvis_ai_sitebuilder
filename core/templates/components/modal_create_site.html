@@ -228,13 +228,14 @@ function start_site_creation() {
       body: JSON.stringify(payload),
   })
   .then(r => r.json())
-  .then(data => {
-      if (data.status) {
-        // тут нужен редирект на URL который вернет бекенд
-      } else {
-          alert(data.error || "Ошибка запуска задачи");
-      }
-  })
+    .then(data => {
+        if (data.status) {
+            const url = data.redirect_url || "/dashboard/";
+            window.location.href = url; // или window.location.assign(url)
+        } else {
+            alert(data.error || "Ошибка запуска задачи");
+        }
+    })
   .catch(() => alert("Ошибка сети"));
 
 

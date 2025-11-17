@@ -17,7 +17,13 @@ from .models import Profile, Transaction, SiteProject, MyTask
 from .models import Profile, Transaction, SiteProject
 from .tools import is_valid_http_url
 from .screenshot import generate_screenshort
-from core.task import generate_site
+from core.task import run_tasks
+from django.urls import reverse
+from django.core.paginator import Paginator
+from django.shortcuts import get_object_or_404
+
+
+from core.task_wrapper import task_generate_site_name_classification, task_generate_site
 
 from core.log import *
 logger.setLevel(logging.DEBUG)
@@ -32,8 +38,53 @@ def home(request):
 @login_required
 def dashboard(request):
     profile = getattr(request.user, "profile", None)
-    sites = SiteProject.objects.filter(user=request.user)
-    return render(request, "dashboard.html", {"profile": profile, "sites": sites})
+
+    # показываем только неархивные сайты
+    qs = SiteProject.objects.filter(user=request.user).exclude(status=SiteProject.STATUS_ARCHIVED)
+
+    paginator = Paginator(qs, 10)  # 10 сайтов на страницу
+    page_number = request.GET.get("page")
+    page_obj = paginator.get_page(page_number)
+
+    return render(request, "dashboard.html", {
+        "profile": profile,
+        "page_obj": page_obj,
+    })
+
+@login_required
+@require_POST
+def site_archive(request, site_id: int):
+    site = get_object_or_404(SiteProject, id=site_id, user=request.user)
+    if site.status != SiteProject.STATUS_ARCHIVED:
+        site.status = SiteProject.STATUS_ARCHIVED
+        site.save(update_fields=["status"])
+    return JsonResponse({"status": True, "id": site_id})
+
+@login_required
+@require_POST
+def sites_bulk_archive(request):
+    try:
+        data = json.loads(request.body or "{}")
+    except Exception:
+        return JsonResponse({"status": False, "error": "Invalid JSON"}, status=400)
+
+    ids = data.get("ids") or []
+    if not isinstance(ids, list):
+        return JsonResponse({"status": False, "error": "ids must be a list"}, status=400)
+
+    try:
+        ids = [int(i) for i in ids]
+    except Exception:
+        return JsonResponse({"status": False, "error": "ids must be list of integers"}, status=400)
+
+    # Обновляем только ваши сайты и только неархивные
+    updated = SiteProject.objects.filter(
+        user=request.user, id__in=ids
+    ).exclude(status=SiteProject.STATUS_ARCHIVED).update(status=SiteProject.STATUS_ARCHIVED)
+
+    return JsonResponse({"status": True, "updated": updated, "ids": ids})
+
+
 
 
 @login_required
@@ -133,25 +184,22 @@ def create_site_task(request):
         site = SiteProject.objects.create(
             user=request.user,
             name=f"{base_name} {now_str}{suffix}",
-            status=SiteProject.STATUS_DRAFT,
+            promt=prompt,
+            ref_site_url=ref_url,
         )
-
-        # Запуск Celery задачи
-        async_res = generate_site.apply_async(args=[site.id, prompt, ref_url])
 
         # Запишем задачу в MyTask
-        MyTask.objects.create(
-            task_id=async_res.id,
-            name=f'Генерация сайта "{site.name}"',
-            status="PENDING",
-            user=request.user,
-        )
+        task_generate_site_name_classification(site)
+        task_generate_site(site)
+
+        async_res = run_tasks.apply_async(args=[site.id])
 
         tasks_out.append({"task_id": async_res.id, "site_id": site.id})
 
     return JsonResponse({
         "status": True,
-        "tasks": tasks_out
+        "tasks": tasks_out,
+        "redirect_url": request.build_absolute_uri(reverse("dashboard")),
     }, status=201)
 
 
