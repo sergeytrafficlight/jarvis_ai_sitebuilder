@@ -1,9 +1,14 @@
 import time
 from celery import shared_task, Task
 from ai.ai import ai_log, ai_log_update
-from ai.ai import MODEL_CHATGPT
-from core.models import SiteProject, MyTask, SystemPromts
+from core.models import SiteProject, MyTask, SystemPrompts
+from ai.ai import get_text2text_answer
+from core.tools import generate_uniq_site_dir_for_user, extract_json_from_text, process_file_operations
 import threading
+
+from core.log import *
+logger.setLevel(logging.DEBUG)
+
 
 
 class BaseTask(Task):
@@ -27,23 +32,48 @@ def run_tasks_serial(q):
     pass
 
 def run_task_generate_name(task: MyTask):
-    promt = SystemPromts.objects.get(type=SystemPromts.SP_NAME_BASE).promt
-    promt += "\n"
-    promt += SystemPromts.objects.get(type=SystemPromts.SP_NAME_CLASSIFICATION).promt
-    promt += "\n"
-    promt += "Промт (начало)\n"
-    promt += task.site.promt
-    promt += "Промт (конец)\n"
+
+    prompt = SystemPrompts.objects.get(type=SystemPrompts.SP_NAME_BASE).prompt
+    prompt += "\n"
+    prompt += SystemPrompts.objects.get(type=SystemPrompts.SP_NAME_CLASSIFICATION).prompt
+    prompt += "\n"
+    prompt += "Промт (начало)\n"
+    prompt += task.site.prompt
+    prompt += "Промт (конец)\n"
+
+    log = ai_log(task, prompt)
+
+    answer = get_text2text_answer(prompt)
+
+    ai_log_update(log, answer)
+
+def run_task_generate_site(task: MyTask):
+    prompt = SystemPrompts.objects.get(type=SystemPrompts.SP_NAME_BASE).prompt
+    prompt += "\n"
+    prompt += SystemPrompts.objects.get(type=SystemPrompts.SP_NAME_BASE_JSON).prompt
+    prompt += "\nЗапрос пользователя для генерации html сайта:\n"
+    prompt += task.site.prompt
+
+    log = ai_log(task, prompt)
+
+    answer = get_text2text_answer(prompt)
+
+    dir = generate_uniq_site_dir_for_user(task.site.user)
+
+    ai_log_update(log, answer)
+
+    answer_json = extract_json_from_text(answer.answer)
+    logger.debug(f"Dir {dir}")
+    result = process_file_operations(answer_json, dir)
+    if result['success'] != True:
+        raise Exception(f"Can't proceed file operations")
+    for e in result['errors']:
+        logger.debug(f" error: {str(e)}")
 
 
-    log = ai_log(task, MODEL_CHATGPT, promt)
 
 
-
-
-
-@shared_task(bind=True, base=BaseTask, name="core.generate_site")
-def run_tasks(self, site_id: int, prompt: str = "", ref_url: str | None = None):
+def run_tasks_ex(site_id: int):
     site_id = site_id
 
     # STARTED
@@ -77,9 +107,13 @@ def run_tasks(self, site_id: int, prompt: str = "", ref_url: str | None = None):
             try:
                 if t.type == MyTask.TYPE_GENERATE_NAME:
                     run_task_generate_name(t)
+                elif t.type == MyTask.TYPE_GENERATE_SITE:
+                    run_task_generate_site(t)
                 else:
                     raise Exception(f"Unknown task ({t.id}) type {t.type}")
             except Exception as e:
+                logger.debug(f"error: {e}")
+                logger.error("Exception occurred:\n%s", traceback.format_exc())
                 t.status = 'FAILURE'
                 error = True
                 t.save()
@@ -96,6 +130,12 @@ def run_tasks(self, site_id: int, prompt: str = "", ref_url: str | None = None):
 
         site.save()
     except Exception as e:
-        pass
+        logger.debug(f"error: {e}")
+        logger.error("Exception occurred:\n%s", traceback.format_exc())
 
     return {"site_id": site_id, "status": "published"}
+
+
+@shared_task(bind=True, base=BaseTask, name="core.generate_site")
+def run_tasks(self, site_id: int):
+    return run_tasks_ex(site_id)

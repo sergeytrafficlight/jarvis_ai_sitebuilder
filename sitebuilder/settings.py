@@ -7,7 +7,7 @@ from django.utils.translation import gettext_lazy as _
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "dev-" + secrets.token_urlsafe(32))
+SECRET_KEY = 'change_me_on_prod'
 DEBUG = True
 ALLOWED_HOSTS = ["*"]
 
@@ -28,6 +28,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "social_django",
     "django_celery_results",
+    'sitebuilder',
     "core",
 ]
 

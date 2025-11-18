@@ -21,3 +21,4 @@ GOOGLE_OAUTH = {
 
 DIR_USER_PREFIX = 'users'
 DIR_IMAGES_PREFIX = 'imgs'
+DIF_SITES_PREFIX = 'sites'

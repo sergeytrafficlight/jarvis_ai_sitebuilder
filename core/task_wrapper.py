@@ -13,3 +13,9 @@ def task_generate_site(site: SiteProject):
         type=MyTask.TYPE_GENERATE_SITE,
         status="PENDING",
     )
+
+def task_generate_image(site: SiteProject):
+    return MyTask.objects.create(
+        site=site,
+        type=MyTask
+    )

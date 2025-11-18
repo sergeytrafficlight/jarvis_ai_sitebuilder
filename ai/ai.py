@@ -1,28 +1,29 @@
 from core.models import SiteProject, MyTask, AICommunicationLog
-
-MODEL_CHATGPT = "chatgpt"
-
-MODEL_CHOICES = [
-    MODEL_CHATGPT,
-]
+import ai.chatgpt as chatgpt
+from ai.ai_answer import ai_answer
 
 class ai_answer:
 
     def __init__(self):
         pass
 
-def ai_log(task: MyTask, model:str, promt: str):
+def ai_log(task: MyTask, prompt: str):
     return AICommunicationLog.objects.create(
         task=task,
-        ai_model=model,
-        promt=promt
+        prompt=prompt
     )
 
-def ai_log_update(log: AICommunicationLog, answer:str):
-    log.answer = answer
+def ai_log_update(log: AICommunicationLog, answer: ai_answer):
+    log.answer = answer.answer
+    log.type = answer.type
+    log.model = answer.model
+    log.prompt_tokens = answer.prompt_tokens
+    log.completion_tokens = answer.completion_tokens
+    log.price_for_ai = answer.price_for_ai
+    log.price_for_client = answer.price_for_client
     log.save()
 
 
-def get_text2text_answer(promt: str, model: str):
-    pass
+def get_text2text_answer(prompt: str, model: str = ''):
+    return chatgpt.get_text2text_answer(prompt)
 

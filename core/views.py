@@ -184,7 +184,7 @@ def create_site_task(request):
         site = SiteProject.objects.create(
             user=request.user,
             name=f"{base_name} {now_str}{suffix}",
-            promt=prompt,
+            prompt=prompt,
             ref_site_url=ref_url,
         )
 

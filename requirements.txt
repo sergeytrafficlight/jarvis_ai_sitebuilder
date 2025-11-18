@@ -6,3 +6,5 @@ playwright
 redis
 celery
 django-celery-results
+httpx
+openai

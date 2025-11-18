@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Profile, Transaction, SiteProject, SystemPromts, AICommunicationLog
+from .models import Profile, Transaction, SiteProject, SystemPrompts, AICommunicationLog, AIModelsSettings
 
 
 @admin.register(Profile)
@@ -21,15 +21,23 @@ class SiteProjectAdmin(admin.ModelAdmin):
     list_filter = ("status", "created_at")
     search_fields = ("name", "user__username", "user__email")
 
-@admin.register(SystemPromts)
-class SystemPromtsAdmin(admin.ModelAdmin):
-  list_display = ("type", "promt")
-  search_fields = ("promt",)
+@admin.register(SystemPrompts)
+class SystemPromptsAdmin(admin.ModelAdmin):
+  list_display = ("type", "prompt")
+  search_fields = ("prompt",)
   list_filter = ("type",)
 
 @admin.register(AICommunicationLog)
 class AICommunicationLogAdmin(admin.ModelAdmin):
-  list_display = ("created_at", "updated_at", "task", "ai_model", "promt", "answer")
-  search_fields = ("promt", "answer")
+  list_display = (
+      "created_at", "updated_at", "task", "ai_model", "price_for_ai", "price_for_client",
+      "prompt", "answer",
+  )
+  search_fields = ("prompt", "answer")
   list_filter = ()
 
+@admin.register(AIModelsSettings)
+class AIModelsSettingsAdmin(admin.ModelAdmin):
+  list_display = ("type", "model", "prompt_tokens_price_1m", "completion_tokens_price_1m", "my_margin")
+  search_fields = ("type", "model")
+  list_filter = ()
