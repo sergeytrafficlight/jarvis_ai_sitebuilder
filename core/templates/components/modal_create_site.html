@@ -18,6 +18,13 @@
 
                 <div class="form-group">
                     <label for="taskPrompt"><strong>{% trans "Что нужно сделать" %}</strong></label>
+
+                    <!-- Быстрые кнопки -->
+                    <div class="quick-actions" style="margin:6px 0 8px; display:flex; gap:8px; flex-wrap:wrap;">
+                        <button type="button" class="btn btn-secondary" id="promptQuickCopy">{% trans "Скопировать" %}</button>
+                        <button type="button" class="btn btn-secondary" id="promptQuickCustom">{% trans "Свой промт" %}</button>
+                    </div>
+
                     <textarea id="taskPrompt" rows="7" placeholder="{% trans 'Опишите, какой сайт нужно сгенерировать...'%}"></textarea>
                 </div>
 
@@ -39,7 +46,6 @@
                         <div class="placeholder-icon">⚠</div>
                         <div class="placeholder-text">{% trans "Ошибка загрузки" %}</div>
                     </div>
-
 
                     <div class="screenshot-scroll">
                         <img id="refPreview" alt="{% trans 'Превью референс-сайта' %}" />
@@ -70,8 +76,15 @@ const refHint = document.getElementById("refHint");
 const siteCountInput = document.getElementById("siteCount");
 const startCreateBtn = document.getElementById("startCreateBtn");
 
+// Новые переменные для быстрых режимов
+const taskPromptEl = document.getElementById("taskPrompt");
+const quickBtnCopy = document.getElementById("promptQuickCopy");
+const quickBtnCustom = document.getElementById("promptQuickCustom");
+const COPY_PROMPT_TEXT = "{% trans 'Сделай максимально похожую копию данного сайта' %}";
+const DEFAULT_PLACEHOLDER_TEXT = taskPromptEl.getAttribute("placeholder") || "{% trans 'Опишите, какой сайт нужно сгенерировать...' %}";
 
-
+let quickMode = "custom";  // 'copy' | 'custom'
+let screenshotOk = false;  // успех загрузки скриншота (для режима 'copy')
 
 function hideAllStates() {
     document.getElementById("previewLoader").style.display = "none";
@@ -107,10 +120,19 @@ function hideError() {
     refError.style.display = "none";
 }
 
+function updateCreateButtonState() {
+    if (quickMode === "copy") {
+        startCreateBtn.disabled = !screenshotOk;
+    } else {
+        startCreateBtn.disabled = false;
+    }
+}
 
 function setPreviewLoading() {
     hideError();
     refHint.textContent = "{% trans 'Загрузка превью...' %}";
+    screenshotOk = false;
+    updateCreateButtonState();
 
     hideAllStates();
     document.getElementById("previewLoader").style.display = "block";
@@ -119,6 +141,8 @@ function setPreviewLoading() {
 function setPreviewNotUsed() {
     hideError();
     refHint.textContent = "{% trans 'Референс-сайт не используется' %}";
+    screenshotOk = false;
+    updateCreateButtonState();
 
     hideAllStates();
     document.getElementById("previewNotUsed").style.display = "flex";
@@ -127,6 +151,8 @@ function setPreviewNotUsed() {
 function setPreviewError(msg) {
     showError(msg);
     refHint.textContent = "{% trans 'Ошибка получения превью' %}";
+    screenshotOk = false;
+    updateCreateButtonState();
 
     // Скрываем ВСЕ
     hideAllStates();
@@ -140,11 +166,10 @@ function setPreviewError(msg) {
     refPreview.style.display = "none";
 }
 
-
 function setPreviewSuccess(url) {
     hideError();
     refHint.textContent = "";
-
+    screenshotOk = true;
     hideAllStates();
     refPreview.style.display = "block";
 
@@ -153,6 +178,32 @@ function setPreviewSuccess(url) {
     };
 
     refPreview.src = url;
+    updateCreateButtonState();
+}
+
+function setQuickMode(mode) {
+    quickMode = mode;
+
+    // Визуально: активную кнопку делаем primary
+    if (quickMode === "copy") {
+        quickBtnCopy.classList.remove("btn-secondary");
+        quickBtnCopy.classList.add("btn-primary");
+        quickBtnCustom.classList.remove("btn-primary");
+        quickBtnCustom.classList.add("btn-secondary");
+
+        // Вставляем готовый промт для копирования
+        taskPromptEl.value = COPY_PROMPT_TEXT;
+    } else {
+        quickBtnCustom.classList.remove("btn-secondary");
+        quickBtnCustom.classList.add("btn-primary");
+        quickBtnCopy.classList.remove("btn-primary");
+        quickBtnCopy.classList.add("btn-secondary");
+
+        // Вставляем текущий плейсхолдер
+        taskPromptEl.value = DEFAULT_PLACEHOLDER_TEXT;
+    }
+
+    updateCreateButtonState();
 }
 
 function {{modal_id}}_open() {
@@ -164,6 +215,9 @@ function {{modal_id}}_open() {
     if (!ref_url.value.trim()) {
         setPreviewNotUsed();
     }
+
+    // При открытии — режим "Свой промт" по умолчанию
+    setQuickMode("custom");
 }
 
 function {{modal_id}}_close() {
@@ -185,7 +239,6 @@ function ref_url_event() {
 
     if (lastController) lastController.abort();
     lastController = new AbortController();
-
 
     fetch("{% url 'reference_screenshot' %}", {
         method: "POST",
@@ -213,6 +266,12 @@ function ref_url_event() {
 
 function start_site_creation() {
 
+    // Доп. защита: при режиме "Скопировать" нельзя отправлять без успешного превью
+    if (quickMode === "copy" && !screenshotOk) {
+        alert("{% trans 'Сначала дождитесь успешной загрузки превью референс-сайта' %}");
+        return;
+    }
+
     const payload = {
       refUrl: document.getElementById("refUrl").value.trim(),
       taskPrompt: document.getElementById("taskPrompt").value.trim(),
@@ -237,7 +296,6 @@ function start_site_creation() {
         }
     })
   .catch(() => alert("Ошибка сети"));
-
 
 }
 
@@ -266,7 +324,17 @@ document.addEventListener('DOMContentLoaded', () => {
         start_site_creation();
     });
 
+    // Обработчики быстрых кнопок
+    if (quickBtnCopy) {
+        quickBtnCopy.addEventListener("click", () => setQuickMode("copy"));
+    }
+    if (quickBtnCustom) {
+        quickBtnCustom.addEventListener("click", () => setQuickMode("custom"));
+    }
 
+    // Изначально — режим "Свой промт"
+    setQuickMode("custom");
+    updateCreateButtonState();
 });
 
 </script>
