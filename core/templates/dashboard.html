@@ -32,7 +32,6 @@
                 <tr>
                     <th></th>
                     <th>{% trans "Название" %}</th>
-                    <th>{% trans "Статус" %}</th>
                     <th>{% trans "Создан" %}</th>
                     <th>{% trans "Действия" %}</th>
                 </tr>
@@ -45,9 +44,9 @@
                         <input type="checkbox" class="site-check" value="{{ s.id }}" />
                     </td>
                     <td>{{ s.name }}</td>
-                    <td>{{ s.get_status_display }}</td>
                     <td>{{ s.created_at|date:"d.m.Y H:i" }}</td>
                     <td>
+                        <a class="btn btn-secondary" href="{% url 'site_detail' s.id %}">{% trans "Открыть" %}</a>
                         <button class="btn btn-secondary btn-delete-one" data-id="{{ s.id }}">{% trans "Удалить" %}</button>
                     </td>
                 </tr>

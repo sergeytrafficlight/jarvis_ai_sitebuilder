@@ -19,11 +19,13 @@ TYPE_CHOICES = (
 
 MODEL_CHATGPT_5 = 'gpt-5'
 MODEL_CHATGPT_5_1 = 'gpt-5.1'
+MODEL_CHATGPT_IMG_1 = 'gpt-image-1'
 MODEL_DEEP_SEEK_CHAT = 'deepseek-chat'
 MODEL_DEEP_SEEK_REASONER = 'deepseek-reasoner'
 MODEL_CHOICES = (
     (MODEL_CHATGPT_5, MODEL_CHATGPT_5),
     (MODEL_CHATGPT_5_1, MODEL_CHATGPT_5_1),
+    (MODEL_CHATGPT_IMG_1, MODEL_CHATGPT_IMG_1),
     (MODEL_DEEP_SEEK_CHAT, MODEL_DEEP_SEEK_CHAT),
     (MODEL_DEEP_SEEK_REASONER, MODEL_DEEP_SEEK_REASONER),
 )
@@ -61,24 +63,11 @@ class Transaction(models.Model):
 
 class SiteProject(models.Model):
 
-    STATUS_AWAITING = "awaiting"
-    STATUS_PROCESSING = "processing"
-    STATUS_DONE = "done"
-    STATUS_ERROR = "error"
-    STATUS_ARCHIVED = "archived"
-    STATUS_CHOICES = (
-        (STATUS_AWAITING, _("Ожидает")),
-        (STATUS_PROCESSING, _("Выполняется")),
-        (STATUS_DONE, _("Готов")),
-        (STATUS_ERROR, _("Ошибка")),
-        (STATUS_ARCHIVED, _("Архив")),
-    )
-
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="sites")
     name = models.CharField(max_length=120)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_AWAITING)
 
     created_at = models.DateTimeField(auto_now_add=True)
+    is_archived = models.BooleanField(default=False)
 
     prompt = models.TextField()
     ref_site_url = models.URLField(max_length=500, blank=True, null=True)
@@ -88,14 +77,31 @@ class SiteProject(models.Model):
         ordering = ["-created_at"]
 
     def __str__(self):
-        return f"{self.name} ({self.get_status_display()})"
+        return f"{self.name}"
 
 class SubSiteProject(models.Model):
+
+    STATUS_AWAITING = "awaiting"
+    STATUS_PROCESSING = "processing"
+    STATUS_DONE = "done"
+    STATUS_ERROR = "error"
+    STATUS_CHOICES = (
+        (STATUS_AWAITING, _("Ожидает")),
+        (STATUS_PROCESSING, _("Выполняется")),
+        (STATUS_DONE, _("Готов")),
+        (STATUS_ERROR, _("Ошибка")),
+    )
+
     site = models.ForeignKey(SiteProject, on_delete=models.CASCADE, related_name="sub_site")
-    root_sub_site = models.ForeignKey('SubSiteProject', on_delete=models.CASCADE, related_name="sub_site")
+    root_sub_site = models.ForeignKey('SubSiteProject', on_delete=models.CASCADE, related_name="sub_site", blank=True, null=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    dir = models.CharField(max_length=64)
+
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_AWAITING)
+    error = models.TextField(null=True, blank=True)
 
 
 
@@ -116,10 +122,15 @@ class SystemPrompts(models.Model):
     SP_NAME_BASE = "basic_prompt"
     SP_NAME_CLASSIFICATION = "name_classification"
     SP_NAME_BASE_JSON = "basic_json"
+    SP_NAME_GENERATE_FOR_SITE_IMAGE = "generate_image_for_site"
+    SP_NAME_I_HAVE_PAGE_SCREENSHOT = "i_have_page_screenshot"
+
     SP_CHOICES = (
         (SP_NAME_BASE, _("Базовый промт")),
         (SP_NAME_CLASSIFICATION, _("Классификация имени сайта")),
         (SP_NAME_BASE_JSON, _("JSON коммуникация")),
+        (SP_NAME_GENERATE_FOR_SITE_IMAGE, _("Генерация картинки для сайта")),
+        (SP_NAME_I_HAVE_PAGE_SCREENSHOT, _("У меня есть скриншот картинки")),
     )
 
     type = models.CharField(choices=SP_CHOICES, max_length=64)
@@ -128,27 +139,34 @@ class SystemPrompts(models.Model):
 
 
 class MyTask(models.Model):
-    TASK_STATUS_CHOICES = [
-        ('PENDING', 'Pending'),
-        ('STARTED', 'Started'),
-        ('SUCCESS', 'Success'),
-        ('FAILURE', 'Failure'),
-        ('RETRY', 'Retry'),
-    ]
+
+    STATUS_AWAITING = "awaiting"
+    STATUS_PROCESSING = "processing"
+    STATUS_DONE = "done"
+    STATUS_ERROR = "error"
+
+    STATUS_CHOICES = (
+        (STATUS_AWAITING, _("Ожидает")),
+        (STATUS_PROCESSING, _("Выполняется")),
+        (STATUS_DONE, _("Готов")),
+        (STATUS_ERROR, _("Ошибка")),
+    )
 
 
     TYPE_GENERATE_NAME = 'generate_name'
     TYPE_GENERATE_SITE = 'generate_site'
+    TYPE_GENERATE_IMAGE = 'generate_image'
 
     TYPE_CHOICES = (
         (TYPE_GENERATE_NAME, _("Генерация имени")),
         (TYPE_GENERATE_SITE, _("Генерация сайта")),
+        (TYPE_GENERATE_IMAGE, _("Генерация изображения")),
     )
 
-    site = models.ForeignKey(SiteProject, on_delete=models.PROTECT, related_name="task")
+    sub_site = models.ForeignKey(SubSiteProject, on_delete=models.PROTECT, related_name="task")
     name = models.CharField(max_length=255)
     type = models.CharField(max_length=20, choices=TYPE_CHOICES)
-    status = models.CharField(max_length=20, choices=TASK_STATUS_CHOICES, default='PENDING')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_AWAITING)
     message = models.TextField(blank=True, null=True)
 
     data_payload = models.JSONField(

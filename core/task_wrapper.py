@@ -1,21 +1,31 @@
-from core.models import SiteProject, MyTask
+from logging import Logger
 
-def task_generate_site_name_classification(site: SiteProject):
+from core.models import SubSiteProject, MyTask
+from core.log import *
+logger.setLevel(logging.DEBUG)
+
+
+def task_generate_site_name_classification(sub_site: SubSiteProject):
+
     return MyTask.objects.create(
-        site=site,
+        sub_site=sub_site,
         type=MyTask.TYPE_GENERATE_NAME,
-        status="PENDING",
     )
 
-def task_generate_site(site: SiteProject):
+def task_generate_site(sub_site: SubSiteProject):
     return MyTask.objects.create(
-        site=site,
+        sub_site=sub_site,
         type=MyTask.TYPE_GENERATE_SITE,
-        status="PENDING",
     )
 
-def task_generate_image(site: SiteProject):
+def task_generate_image(sub_site: SubSiteProject, path: str, prompt: str):
+    payload = {
+        'path': path,
+        'prompt': prompt,
+    }
     return MyTask.objects.create(
-        site=site,
-        type=MyTask
+        sub_site=sub_site,
+        type=MyTask.TYPE_GENERATE_IMAGE,
+        data_payload=payload,
     )
+

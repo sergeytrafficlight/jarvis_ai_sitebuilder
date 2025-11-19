@@ -17,4 +17,8 @@ urlpatterns = [
     path("sites/<int:site_id>/archive/", views.site_archive, name="site_archive"),
     path("sites/bulk_archive/", views.sites_bulk_archive, name="sites_bulk_archive"),
 
+    path("sites/<int:site_id>/", views.site_detail, name="site_detail"),
+    path("api/subsite/<int:sub_id>/tasks_status/", views.subsite_tasks_status, name="subsite_tasks_status"),
+
+
 ]

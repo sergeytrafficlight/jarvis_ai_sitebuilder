@@ -1,4 +1,9 @@
 import json
+from django.db.models import Count
+from django.shortcuts import get_object_or_404
+from collections import defaultdict
+from django.urls import reverse
+from django.views.decorators.clickjacking import xframe_options_sameorigin
 from django.http import FileResponse, Http404
 from pathlib import Path
 from django.shortcuts import render, redirect
@@ -10,10 +15,10 @@ from django.utils.translation import gettext_lazy as _lazy
 from django.views.decorators.http import require_POST
 from django.http import JsonResponse
 from sitebuilder.settings import USER_FILES_ROOT
-from core.tools import get_image_path_for_user, get_base_path_for_user
+from core.tools import get_image_path_for_user, get_base_path_for_user, get_subsite_dir, generate_uniq_subsite_dir_for_site
 from django.utils import timezone
-from .models import Profile, Transaction, SiteProject, MyTask
-
+from .models import Profile, Transaction, SiteProject, MyTask, SubSiteProject
+from django.http import FileResponse, Http404, HttpResponse
 from .models import Profile, Transaction, SiteProject
 from .tools import is_valid_http_url
 from .screenshot import generate_screenshort
@@ -40,7 +45,7 @@ def dashboard(request):
     profile = getattr(request.user, "profile", None)
 
     # показываем только неархивные сайты
-    qs = SiteProject.objects.filter(user=request.user).exclude(status=SiteProject.STATUS_ARCHIVED)
+    qs = SiteProject.objects.filter(user=request.user).exclude(is_archived=True)
 
     paginator = Paginator(qs, 10)  # 10 сайтов на страницу
     page_number = request.GET.get("page")
@@ -138,13 +143,68 @@ def reference_screenshot(request):
 
 
 @login_required
+@xframe_options_sameorigin
 def user_file_view(request, user_id, path):
     if request.user.id != user_id:
         raise Http404('File not found')
-    base_path = get_base_path_for_user(request.user)
-    file_path = Path(base_path + "/" + path)
-    logger.debug(f"path {file_path} | {path} | {file_path}")
-    return FileResponse(open(file_path, "rb"))
+
+    base_dir = Path(get_base_path_for_user(request.user)).resolve()
+    original_path = path or ""
+    requested_path = (base_dir / original_path).resolve()
+
+    # Защита от выхода за пределы директории пользователя
+    try:
+        requested_path.relative_to(base_dir)
+    except ValueError:
+        raise Http404('File not found')
+
+    # Определяем, является ли запросом к index.html (включая запрос к директории)
+    endswith_slash = original_path.endswith('/')
+    is_index_request = False
+
+    if endswith_slash:
+        # Явно запросили директорию
+        is_index_request = True
+        requested_path = (requested_path / 'index.html')
+    else:
+        # Если это директория (существующая) — ищем index.html
+        if requested_path.exists() and requested_path.is_dir():
+            is_index_request = True
+            requested_path = requested_path / 'index.html'
+        # Если в пути явно указан index.html
+        elif requested_path.name.lower() == 'index.html':
+            is_index_request = True
+
+    logger.debug(f"user_file_view -> base: {base_dir}, req: {requested_path}, is_index: {is_index_request}")
+
+    try:
+        return FileResponse(open(requested_path, "rb"))
+    except FileNotFoundError:
+        if is_index_request:
+            # Возвращаем заглушку
+            placeholder = """<!DOCTYPE html>
+            <html lang="ru">
+            <head>
+              <meta charset="utf-8">
+              <title>Сайт в процессе создания</title>
+              <meta name="viewport" content="width=device-width, initial-scale=1">
+              <style>
+                body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:#0b1220; color:#e2e8f0; display:flex; align-items:center; justify-content:center; height:100vh; margin:0; }
+                .box { text-align:center; padding:24px; border:1px solid rgba(255,255,255,0.08); border-radius:12px; background:#0f172a; }
+                .muted { color:#94a3b8; margin-top:8px; }
+              </style>
+            </head>
+            <body>
+              <div class="box">
+                <h1>Сайт в процессе создания</h1>
+                <div class="muted">Пожалуйста, обновите страницу позже.</div>
+              </div>
+            </body>
+            </html>"""
+            return HttpResponse(placeholder, content_type="text/html; charset=utf-8", status=200)
+        # Для прочих файлов — 404
+        raise Http404('File not found')
+
 
 @login_required
 @require_POST
@@ -175,12 +235,13 @@ def create_site_task(request):
         if not ok:
             return JsonResponse({"status": False, "error": msg}, status=400)
 
-    tasks_out = []
+
     base_name = name or "Сайт"
     now_str = timezone.now().strftime("%Y-%m-%d %H:%M:%S")
 
     for i in range(count):
         suffix = f" #{i + 1}" if count > 1 else ""
+
         site = SiteProject.objects.create(
             user=request.user,
             name=f"{base_name} {now_str}{suffix}",
@@ -188,22 +249,104 @@ def create_site_task(request):
             ref_site_url=ref_url,
         )
 
+        full_path, uniq_dir = generate_uniq_subsite_dir_for_site(site)
+
+        sub_site = SubSiteProject.objects.create(
+            site=site,
+            root_sub_site=None,
+            dir = uniq_dir,
+        )
+
         # Запишем задачу в MyTask
-        task_generate_site_name_classification(site)
-        task_generate_site(site)
+        task_generate_site_name_classification(sub_site)
+        task_generate_site(sub_site)
 
-        async_res = run_tasks.apply_async(args=[site.id])
+        run_tasks.apply_async(args=[sub_site.id])
 
-        tasks_out.append({"task_id": async_res.id, "site_id": site.id})
+    if count == 1:
+        redirect_url = request.build_absolute_uri(
+            reverse("site_detail", args=[site.id])
+        )
+    else:
+        redirect_url = request.build_absolute_uri(reverse("dashboard"))
 
     return JsonResponse({
         "status": True,
-        "tasks": tasks_out,
-        "redirect_url": request.build_absolute_uri(reverse("dashboard")),
+        "redirect_url": redirect_url,
     }, status=201)
 
 
+@login_required
+def site_detail(request, site_id: int):
+    site = get_object_or_404(SiteProject, id=site_id, user=request.user)
 
+    # Все сабсайты по проекту
+    subs = list(SubSiteProject.objects.filter(site=site).order_by("id"))
+
+    # Построим дерево родитель -> дети и плоский список для рендеринга с отступами
+    by_parent = defaultdict(list)
+    for s in subs:
+        by_parent[s.root_sub_site_id].append(s)
+
+    flat_tree = []
+    def walk(pid, depth):
+        for n in by_parent.get(pid, []):
+            flat_tree.append({"node": n, "depth": depth, "indent": depth * 14})
+            walk(n.id, depth + 1)
+
+    walk(None, 0)
+
+    # Выбранный сабсайт — из query ?sub=ID, либо первый в дереве
+    selected_sub = None
+    sub_id = request.GET.get("sub")
+    if sub_id:
+        try:
+            selected_sub = next(s["node"] for s in flat_tree if str(s["node"].id) == str(sub_id))
+        except StopIteration:
+            selected_sub = None
+    if not selected_sub and flat_tree:
+        selected_sub = flat_tree[0]["node"]
+
+    # Соберем iframe src (пытаемся открыть index.html выбранного сабсайта)
+    iframe_src = None
+    if selected_sub:
+        iframe_src = reverse(
+            'user_file',
+            kwargs={
+                'user_id': request.user.id,
+                'path': f"sites/{site.id}/{selected_sub.dir}/index.html",
+            }
+        )
+
+
+    logger.debug(f"selected_sub: {selected_sub}")
+    logger.debug(f"iframe src: {iframe_src}")
+
+    return render(request, "site_detail.html", {
+        "site": site,
+        "flat_tree": flat_tree,
+        "selected_sub": selected_sub,
+        "iframe_src": iframe_src,
+    })
+
+
+@login_required
+def subsite_tasks_status(request, sub_id: int):
+    # доступ только к своим сабсайтам
+    sub = get_object_or_404(SubSiteProject, id=sub_id, site__user=request.user)
+
+    qs = MyTask.objects.filter(sub_site=sub)
+    active_qs = qs.filter(status__in=[MyTask.STATUS_AWAITING, MyTask.STATUS_PROCESSING])
+
+    by_status = {row["status"]: row["c"] for row in qs.values("status").annotate(c=Count("id"))}
+
+    return JsonResponse({
+        "status": True,
+        "active": active_qs.count(),
+        "total": qs.count(),
+        "site_name": sub.site.name,
+        "by_status": by_status,
+    })
 
 
 

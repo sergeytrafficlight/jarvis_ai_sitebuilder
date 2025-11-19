@@ -8,6 +8,7 @@ from django.utils.translation import gettext_lazy as _
 from django.core.files import File
 from core.models import GeneratedImage
 from .tools import is_valid_http_url, get_image_path_for_user
+from core.utils import make_session_cookie_for_user
 
 from core.log import *
 logger.setLevel(logging.DEBUG)
@@ -15,7 +16,14 @@ logger.setLevel(logging.DEBUG)
 
 DEFAULT_TIMEOUT_MS = 30000
 
-async def take_full_screenshot(url: str, out_path: str, timeout: int = DEFAULT_TIMEOUT_MS, headless: bool = True, wait_after_load: float = 0.5):
+async def take_full_screenshot(url: str,
+                               out_path: str,
+                               timeout: int = DEFAULT_TIMEOUT_MS,
+                               headless: bool = True,
+                               wait_after_load: float = 0.5,
+                               cookies=None,
+                               headers=None
+                               ):
 
     logger.debug(f"take screen: {url}")
 
@@ -27,10 +35,13 @@ async def take_full_screenshot(url: str, out_path: str, timeout: int = DEFAULT_T
         context = await browser.new_context(
             viewport={"width": 1280, "height": 800},
             device_scale_factor=1,
+            extra_http_headers=headers or {}
         )
+        if cookies:
+            await context.add_cookies(cookies)
+
         page = await context.new_page()
         try:
-            # Навигация — ждём завершения сетевой активности
             await page.goto(url, wait_until="networkidle", timeout=timeout)
         except PWTimeoutError:
             await browser.close()
@@ -49,7 +60,7 @@ async def take_full_screenshot(url: str, out_path: str, timeout: int = DEFAULT_T
 
         return True, ""
 
-def generate_screenshort(u: User, url: str):
+def generate_screenshort(u: User, url: str, auth_user: User = None):
     logger.debug(f"take url {url}")
     r, msg = is_valid_http_url(url)
     if not r:
@@ -62,7 +73,21 @@ def generate_screenshort(u: User, url: str):
     dir.mkdir(parents=True, exist_ok=True)
     out_path = f"{dir}/{filename}"
 
-    r, msg = asyncio.run(take_full_screenshot(url, str(out_path)))
+    cookies = None
+    session_to_cleanup = None
+    if auth_user:
+        host = urlparse(url).hostname or 'localhost'
+        session_to_cleanup, cookie = make_session_cookie_for_user(auth_user, domain=host)
+        cookies = [cookie]
+
+    r, msg = asyncio.run(take_full_screenshot(url, str(out_path), cookies=cookies))
+
+    if session_to_cleanup:
+        try:
+            session_to_cleanup.delete()
+        except Exception:
+            pass
+
     if not r:
         return r, msg
 

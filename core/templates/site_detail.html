@@ -1,0 +1,193 @@
+
+{% extends 'base.html' %}
+{% load i18n %}
+{% block title %}{{ site.name }}{% endblock %}
+
+{% block content %}
+<style>
+  .layout {
+    display: grid;
+    grid-template-columns: 260px 1fr;
+    gap: 16px;
+    align-items: start;
+  }
+  .sidebar {
+    background: var(--card);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 14px;
+    padding: 12px;
+    position: sticky;
+    top: 74px; /* ниже шапки */
+    max-height: calc(100vh - 100px);
+    overflow: auto;
+  }
+  .side-item {
+    display: block;
+    padding: 8px 10px;
+    border-radius: 10px;
+    color: var(--text);
+    border: 1px solid transparent;
+    margin-bottom: 6px;
+    text-decoration: none;
+  }
+  .side-item:hover {
+    text-decoration: none;
+    background: rgba(255,255,255,0.04);
+    border-color: rgba(255,255,255,0.08);
+  }
+  .side-item.active {
+    background: rgba(79,70,229,0.12);
+    border-color: rgba(79,70,229,0.45);
+    color: #c7d2fe;
+  }
+  .main-col .card + .card { margin-top: 12px; }
+
+  /* Превью вынесено на всю ширину (контейнер) под сеткой */
+  .card-preview { margin-top: 12px; }
+  .iframe-wrap {
+    height: 80vh;
+    min-height: 520px;
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 14px;
+    overflow: hidden;
+    background: #0b1220;
+  }
+  .iframe-wrap iframe {
+    width: 100%;
+    height: 100%;
+    border: none;
+    background: white;
+  }
+
+  .muted { color: var(--muted); }
+  .textarea {
+    width: 100%;
+    min-height: 140px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px;
+    padding: 10px 12px;
+    color: var(--text);
+    resize: vertical;
+  }
+</style>
+
+<h2 id="site_name">{{ site.name }}</h2>
+
+<!-- Верхняя двухколоночная часть: слева дерево, справа статус + промт -->
+<div class="layout">
+  <aside class="sidebar">
+    <div class="muted" style="margin-bottom:8px;">Версии (SubSiteProject)</div>
+    {% if flat_tree %}
+      {% for item in flat_tree %}
+        {% with sub=item.node %}
+          <a
+            class="side-item {% if selected_sub and selected_sub.id == sub.id %}active{% endif %}"
+            href="{% url 'site_detail' site.id %}?sub={{ sub.id }}"
+            style="margin-left: {{ item.indent }}px;"
+          >
+            #{{ sub.id }} — {{ sub.dir }}
+            {% if sub.status %}<span class="muted" style="margin-left:6px;">({{ sub.status }})</span>{% endif %}
+          </a>
+        {% endwith %}
+      {% endfor %}
+    {% else %}
+      <div class="muted">Нет сгенерированных версий</div>
+    {% endif %}
+  </aside>
+
+  <div class="main-col">
+    <div class="card">
+      <strong>Статус задач</strong>
+      <div id="tasksStatus" class="muted" style="margin-top:6px;">Загрузка...</div>
+    </div>
+
+
+    <div class="card">
+      <strong>Промт для коррекции лендинга</strong>
+      <div style="margin-top:8px;">
+        <textarea id="correctionPrompt" class="textarea" placeholder="Опишите, что нужно скорректировать..."></textarea>
+      </div>
+      <div style="margin-top:10px; text-align:right;">
+        <button class="btn btn-primary" id="sendCorrectionBtn" disabled>Отправить</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Ниже — превью на всю ширину страницы (контейнера) -->
+<div class="card card-preview">
+  <strong>Превью выбранной версии</strong>
+  <div class="iframe-wrap" style="margin-top:10px;">
+    {% if iframe_src %}
+      <iframe id="previewFrame" src="{{ iframe_src }}"></iframe>
+    {% else %}
+      <div class="muted" style="padding:12px;">index.html не найден. Сгенерируйте сайт или выберите другую версию.</div>
+    {% endif %}
+  </div>
+</div>
+
+<script>
+(function() {
+  const selectedSubId = {{ selected_sub.id|default:"null" }};
+  const statusEl = document.getElementById('tasksStatus');
+  const promptEl = document.getElementById('correctionPrompt');
+  const sendBtn = document.getElementById('sendCorrectionBtn');
+  const previewFrame = document.getElementById('previewFrame');
+  const site_name = document.getElementById('site_name');
+  let lastActiveCount = null;
+
+  async function poll() {
+    if (!selectedSubId) return;
+    try {
+      const resp = await fetch(`/api/subsite/${selectedSubId}/tasks_status/`, {
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+      });
+      const data = await resp.json();
+      if (!data.status) throw new Error(data.error || 'Ошибка');
+
+
+      site_name.innerHTML = data.site_name;
+      
+      const active = data.active || 0;
+      const total = data.total || 0;
+
+      if (statusEl) {
+        statusEl.textContent = `Активных задач: ${active} (всего: ${total})`;
+      }
+
+      if (lastActiveCount !== null && lastActiveCount !== active && previewFrame) {
+          try {
+            const u = new URL(previewFrame.src, window.location.origin);
+            u.searchParams.set('_ts', Date.now()); // анти-кэш
+            previewFrame.src = u.toString();
+          } catch (e) {
+            // запасной вариант
+            previewFrame.src = previewFrame.src;
+          }
+      }
+
+      lastActiveCount = active;
+      const locked = active > 0;
+      if (promptEl) {
+        promptEl.disabled = locked;
+        promptEl.placeholder = locked
+          ? 'Идёт обработка задач — подождите...'
+          : 'Опишите, что нужно скорректировать...';
+      }
+      if (sendBtn) {
+        sendBtn.disabled = locked;
+      }
+
+
+    } catch (e) {
+      if (statusEl) statusEl.textContent = 'Ошибка получения статуса';
+    }
+  }
+
+  poll();
+  const timer = setInterval(poll, 3000);
+  window.addEventListener('beforeunload', () => clearInterval(timer));
+})();
+</script>
+{% endblock %}
