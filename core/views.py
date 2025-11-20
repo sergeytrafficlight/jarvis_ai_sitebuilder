@@ -26,6 +26,11 @@ from core.task import run_tasks
 from django.urls import reverse
 from django.core.paginator import Paginator
 from django.shortcuts import get_object_or_404
+import requests
+from pathlib import Path
+from core.tools import get_subsite_dir
+from core.funds_balance import balance
+
 
 
 from core.task_wrapper import task_generate_site_name_classification, task_generate_site
@@ -348,6 +353,139 @@ def subsite_tasks_status(request, sub_id: int):
         "by_status": by_status,
     })
 
+@login_required
+@require_POST
+def subsite_update_text(request, sub_id: int):
+    from bs4 import BeautifulSoup
+    sub = get_object_or_404(SubSiteProject, id=sub_id, site__user=request.user)
+    try:
+        data = json.loads(request.body or "{}")
+    except Exception:
+        return JsonResponse({"status": False, "error": "Invalid JSON"}, status=400)
 
+    rel_path = (data.get("file") or "").strip()
+    selector = (data.get("selector") or "").strip()
+    new_text = data.get("text")
+    if not rel_path or not selector or new_text is None:
+        return JsonResponse({"status": False, "error": "Missing fields"}, status=400)
 
+    base_dir = Path(get_subsite_dir(sub)).resolve()
+    target = (base_dir / rel_path).resolve()
+    try:
+        target.relative_to(base_dir)
+    except ValueError:
+        return JsonResponse({"status": False, "error": "Invalid path"}, status=400)
 
+    if target.suffix.lower() not in [".html", ".htm"]:
+        return JsonResponse({"status": False, "error": "Only HTML files allowed"}, status=400)
+    if not target.exists():
+        return JsonResponse({"status": False, "error": "File not found"}, status=404)
+
+    try:
+        with open(target, "r", encoding="utf-8") as f:
+            soup = BeautifulSoup(f.read(), "html.parser")
+
+        el = soup.select_one(selector)
+        if el is None:
+            return JsonResponse({"status": False, "error": "Element not found by selector"}, status=404)
+
+        # Разрешаем правку только листовых элементов (без вложенных тегов)
+        if el.find(True) is not None:
+            return JsonResponse({"status": False, "error": "Element has nested tags; only pure text items are editable"}, status=400)
+
+        el.string = str(new_text)
+
+        with open(target, "w", encoding="utf-8") as f:
+            f.write(str(soup))
+
+        return JsonResponse({"status": True})
+    except Exception as e:
+        logger.error("subsite_update_text error: %s", e, exc_info=True)
+        return JsonResponse({"status": False, "error": "Server error"}, status=500)
+
+@login_required
+@require_POST
+def subsite_replace_image(request, sub_id: int):
+    sub = get_object_or_404(SubSiteProject, id=sub_id, site__user=request.user)
+    rel_path = (request.POST.get("rel_path") or "").strip()
+    up_file = request.FILES.get("file")
+
+    if not rel_path or not up_file:
+        return JsonResponse({"status": False, "error": "Missing rel_path or file"}, status=400)
+
+    base_dir = Path(get_subsite_dir(sub)).resolve()
+    target = (base_dir / rel_path).resolve()
+    try:
+        target.relative_to(base_dir)
+    except ValueError:
+        return JsonResponse({"status": False, "error": "Invalid path"}, status=400)
+
+    target.parent.mkdir(parents=True, exist_ok=True)
+
+    try:
+        with open(target, "wb") as f:
+            for chunk in up_file.chunks():
+                f.write(chunk)
+    except Exception as e:
+        return JsonResponse({"status": False, "error": f"Write error: {e}"}, status=500)
+
+    file_url = reverse(
+        "user_file",
+        kwargs={
+            "user_id": request.user.id,
+            "path": f"sites/{sub.site.id}/{sub.dir}/{rel_path}",
+        },
+    )
+    return JsonResponse({"status": True, "file_url": file_url})
+
+@login_required
+@require_POST
+def subsite_replace_image_by_url(request, sub_id: int):
+    sub = get_object_or_404(SubSiteProject, id=sub_id, site__user=request.user)
+    try:
+        data = json.loads(request.body or "{}")
+    except Exception:
+        return JsonResponse({"status": False, "error": "Invalid JSON"}, status=400)
+
+    rel_path = (data.get("rel_path") or "").strip()
+    url = (data.get("url") or "").strip()
+
+    if not rel_path or not url:
+        return JsonResponse({"status": False, "error": "Missing rel_path or url"}, status=400)
+
+    ok, msg = is_valid_http_url(url)
+    if not ok:
+        return JsonResponse({"status": False, "error": msg or "Invalid URL"}, status=400)
+
+    base_dir = Path(get_subsite_dir(sub)).resolve()
+    target = (base_dir / rel_path).resolve()
+    try:
+        target.relative_to(base_dir)
+    except ValueError:
+        return JsonResponse({"status": False, "error": "Invalid path"}, status=400)
+
+    target.parent.mkdir(parents=True, exist_ok=True)
+
+    try:
+        r = requests.get(url, stream=True, timeout=15)
+        r.raise_for_status()
+        # опционально проверим тип контента
+        ctype = r.headers.get("Content-Type", "")
+        if not ctype.startswith("image/"):
+            return JsonResponse({"status": False, "error": "URL is not an image"}, status=400)
+
+        with open(target, "wb") as f:
+            for chunk in r.iter_content(1024 * 64):
+                if chunk:
+                    f.write(chunk)
+    except Exception as e:
+        return JsonResponse({"status": False, "error": f"Download error: {e}"}, status=400)
+
+    file_url = reverse(
+        "user_file",
+        kwargs={
+            "user_id": request.user.id,
+            "path": f"sites/{sub.site.id}/{sub.dir}/{rel_path}",
+        },
+    )
+    return JsonResponse({"status": True, "file_url": file_url})

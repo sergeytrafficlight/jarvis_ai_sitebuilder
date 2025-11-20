@@ -1,0 +1,59 @@
+<div class="modal-overlay" id="modal_edit_image" hidden>
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Редактирование изображения</h3>
+      <button class="modal-close" data-close="#modal_edit_image">✕</button>
+    </div>
+
+    <div class="modal-body two-columns">
+      <!-- Левая колонка: превью + действия -->
+      <div class="modal-left" style="display:flex; flex-direction:column; gap:12px; min-width:0;">
+        <div class="muted" id="imgMeta"></div>
+        <div class="muted" id="imgSize">Размеры: — × —</div>
+
+        <div style="display:flex; gap:12px; align-items:flex-start;">
+            <img id="imgPreview" src="" alt="Выбранное изображение"
+                 style="border-radius:8px; border:1px solid rgba(255,255,255,0.1);" />
+
+        </div>
+
+        <div class="card" style="padding:12px;">
+          <strong>Замена с компьютера</strong>
+          <div style="margin-top:8px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+            <input type="file" id="imgUploadFile" accept="image/*" />
+            <button class="btn btn-primary" id="imgUploadBtn">Заменить</button>
+          </div>
+          <div class="muted" style="margin-top:6px;">Файл будет записан поверх текущего пути.</div>
+        </div>
+
+        <div class="card" style="padding:12px;">
+          <strong>Замена по URL</strong>
+          <div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">
+            <input type="url" id="imgUrlInput" placeholder="https://..." style="flex:1;
+                   background: rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.08);
+                   border-radius:10px; padding:10px 12px; color:var(--text);" />
+            <button class="btn btn-secondary" id="imgUrlBtn">Заменить</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Правая колонка: зона для AI-полей -->
+      <div class="modal-right" style="display:flex; flex-direction:column;">
+        <div style="display:flex; flex-direction:column; gap:8px; height:100%;">
+          <label><strong>AI-промт для изображения</strong></label>
+          <textarea id="imgAiPrompt" class="textarea" style="flex:1; min-height:280px;"
+                    placeholder="Опишите желаемые изменения изображения..."></textarea>
+
+          <label><strong>Доп. параметры</strong></label>
+          <textarea id="imgAiParams" class="textarea" rows="4"
+                    placeholder="Необязательные параметры/заметки..."></textarea>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn btn-secondary" data-close="#modal_edit_image">Закрыть</button>
+    </div>
+  </div>
+</div>
+

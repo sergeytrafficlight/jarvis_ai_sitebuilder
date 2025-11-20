@@ -532,3 +532,45 @@ a:hover {
     /* убрать авто-центрирование, если было унаследовано */
     margin: 0;
 }
+
+  #modal_edit_image .modal {
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden; /* чтобы внутренности скроллились, а не раздували модалку */
+  }
+
+  #modal_edit_image .modal-header,
+  #modal_edit_image .modal-footer {
+    flex: 0 0 auto;
+  }
+
+  #modal_edit_image .modal-body {
+    flex: 1 1 auto;   /* тело занимает остаток */
+    min-height: 0;    /* важно для корректного скролла внутри */
+    overflow: auto;   /* скроллим содержимое, а не весь экран */
+  }
+
+  /* сетка тела модалки тоже не должна раздувать высоту */
+  #modal_edit_image .two-columns,
+  #modal_edit_image .modal-left,
+  #modal_edit_image .modal-right {
+    min-height: 0;
+  }
+
+  /* чуть сильнее ограничим превью по высоте, чтобы точно не «выпирало» */
+#modal_edit_image #imgPreview {
+  max-width: min(100%, 520px);
+  max-height: 36vh;  /* было 50vh */
+  width: auto;
+  height: auto;
+  display: block;
+  object-fit: contain;
+}
+
+@media (max-width: 860px) {
+  #modal_edit_image #imgPreview {
+    max-height: 28vh; /* было 40vh */
+  }
+}
+

@@ -86,8 +86,7 @@
             href="{% url 'site_detail' site.id %}?sub={{ sub.id }}"
             style="margin-left: {{ item.indent }}px;"
           >
-            #{{ sub.id }} — {{ sub.dir }}
-            {% if sub.status %}<span class="muted" style="margin-left:6px;">({{ sub.status }})</span>{% endif %}
+            #{{ sub.dir }} <span class="muted" style="margin-left:6px;">({{ sub.get_status }})</span>
           </a>
         {% endwith %}
       {% endfor %}
@@ -116,16 +115,29 @@
 </div>
 
 <!-- Ниже — превью на всю ширину страницы (контейнера) -->
-<div class="card card-preview">
-  <strong>Превью выбранной версии</strong>
-  <div class="iframe-wrap" style="margin-top:10px;">
-    {% if iframe_src %}
-      <iframe id="previewFrame" src="{{ iframe_src }}"></iframe>
-    {% else %}
-      <div class="muted" style="padding:12px;">index.html не найден. Сгенерируйте сайт или выберите другую версию.</div>
-    {% endif %}
+  <div class="card card-preview">
+    <div class="card-preview-header" style="display:flex; align-items:center; gap:10px;">
+      <strong>Превью выбранной версии</strong>
+      <div style="margin-left:auto; display:flex; gap:8px;">
+        <button class="btn btn-secondary" id="editToggleBtn">Включить режим редактирования</button>
+        {% if iframe_src %}
+          <a class="btn btn-primary" id="openSiteBtn" href="{{ iframe_src }}" target="_blank" rel="noopener">Открыть</a>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="iframe-wrap" style="margin-top:10px;">
+      {% if iframe_src %}
+        <iframe id="previewFrame" src="{{ iframe_src }}"></iframe>
+      {% else %}
+        <div class="muted" style="padding:12px;">index.html не найден. Сгенерируйте сайт или выберите другую версию.</div>
+      {% endif %}
+    </div>
   </div>
-</div>
+
+
+{% include 'components/modal_iframe_img_edit.html'%}
+{% include 'components/modal_iframe_text_edit.html'%}
 
 <script>
 (function() {
@@ -190,4 +202,406 @@
   window.addEventListener('beforeunload', () => clearInterval(timer));
 })();
 </script>
+
+<script>
+(function() {
+  const previewFrame = document.getElementById('previewFrame');
+  const editToggleBtn = document.getElementById('editToggleBtn');
+
+  const modalText = document.getElementById('modal_edit_text');
+  const textMeta = document.getElementById('textMeta');
+  const textEditContent = document.getElementById('textEditContent');
+  const textEditSaveBtn = document.getElementById('textEditSaveBtn');
+
+  const modalImg = document.getElementById('modal_edit_image');
+  const imgMeta = document.getElementById('imgMeta');
+  const imgPreview = document.getElementById('imgPreview');
+
+  const imgSize = document.getElementById('imgSize');
+  const imgUploadFile = document.getElementById('imgUploadFile');
+  const imgUploadBtn = document.getElementById('imgUploadBtn');
+  const imgUrlInput = document.getElementById('imgUrlInput');
+  const imgUrlBtn = document.getElementById('imgUrlBtn');
+  let currentImageRelPath = '';
+
+
+
+  // Эти значения нужны, чтобы вычислить относительный путь к файлу внутри сабсайта
+  const userId = {{ request.user.id }};
+  const siteId = {{ site.id }};
+  const subId = {{ selected_sub.id|default:"null" }};
+  const subDir = "{{ selected_sub.dir|default:'' }}";
+
+  const state = {
+    editMode: false,
+    currentTextEl: null,
+    cleanupFns: [],
+  };
+
+  function openModal(el) {
+    el.removeAttribute('hidden');
+    el.classList.add('active');
+  }
+  function closeModal(el) {
+    el.classList.remove('active');
+    el.setAttribute('hidden', '');
+  }
+  document.body.addEventListener('click', (e) => {
+    const closeSel = e.target?.getAttribute('data-close');
+    if (closeSel) {
+      const m = document.querySelector(closeSel);
+      if (m) closeModal(m);
+    }
+  });
+
+  function injectEditStyle(doc) {
+    if (doc.getElementById('__ai-edit-style')) return;
+    const style = doc.createElement('style');
+    style.id = '__ai-edit-style';
+    style.textContent = `
+        .__ai-editable { outline: 2px dashed #4f46e5 !important; outline-offset: 2px; cursor: pointer; }
+        .__ai-editable:hover { outline-color: #22d3ee !important; background: rgba(79,70,229,0.06) !important; }
+        .__ai-editable-img { outline: 2px dashed #f97316 !important; outline-offset: 2px; cursor: pointer; }
+        .__ai-editable-img:hover { outline-color: #fb923c !important; background: rgba(249,115,22,0.06) !important; }
+
+    `;
+    doc.head.appendChild(style);
+  }
+
+  function isVisible(el) {
+    const style = el.ownerDocument.defaultView.getComputedStyle(el);
+    return style && style.display !== 'none' && style.visibility !== 'hidden' && el.offsetParent !== null;
+  }
+
+  // Размечаем только листовые узлы без вложенных тегов
+  function markEditableElements(doc) {
+    const selectorsText = ['p','h1','h2','h3','h4','h5','h6','span','a','li','button','label','small','strong','em','div'];
+    const textNodes = Array.from(doc.querySelectorAll(selectorsText.join(',')))
+      .filter(el => el && isVisible(el) && el.children.length === 0 && (el.textContent || '').trim().length > 0);
+
+    textNodes.forEach(el => {
+      el.classList.add('__ai-editable');
+    });
+  }
+
+    /*
+  function unmarkEditable(doc) {
+    const list = doc.querySelectorAll('.__ai-editable');
+    list.forEach(el => {
+      el.classList.remove('__ai-editable');
+    });
+  }
+  */
+
+  function markEditableImages(doc) {
+    const imgs = Array.from(doc.querySelectorAll('img'))
+      .filter(el => el && isVisible(el));
+    imgs.forEach(el => el.classList.add('__ai-editable-img'));
+  }
+
+  function unmarkEditable(doc) {
+    const list = doc.querySelectorAll('.__ai-editable, .__ai-editable-img');
+    list.forEach(el => el.classList.remove('__ai-editable', '__ai-editable-img'));
+  }
+
+
+  function cssPathFor(el, doc) {
+    if (el.id) return `#${CSS.escape(el.id)}`;
+    const parts = [];
+    while (el && el.nodeType === 1 && el !== doc.body && el !== doc.documentElement) {
+      let selector = el.nodeName.toLowerCase();
+      // nth-of-type
+      let nth = 1, sib = el;
+      while ((sib = sib.previousElementSibling)) {
+        if (sib.nodeName === el.nodeName) nth++;
+      }
+      selector += `:nth-of-type(${nth})`;
+      parts.unshift(selector);
+      el = el.parentElement;
+    }
+    return parts.join(' > ');
+  }
+
+  function bindIframeHandlers(doc) {
+    const onClick = (e) => {
+      if (!state.editMode) return;
+
+        const img = e.target.closest('img.__ai-editable-img');
+          if (img) {
+            e.preventDefault();
+            e.stopPropagation();
+            state.currentImgEl = img;
+            openImgModal(img, doc);
+            return;
+          }
+
+      const link = e.target.closest('a,button,[role="button"]');
+      if (link) e.preventDefault();
+
+      const target = e.target.closest('.__ai-editable');
+      if (!target) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      state.currentTextEl = target;
+      openTextModal(target, doc);
+    };
+    doc.addEventListener('click', onClick, true);
+
+    const onSubmit = (e) => { if (state.editMode) e.preventDefault(); };
+    doc.addEventListener('submit', onSubmit, true);
+
+    state.cleanupFns.push(() => {
+      try { doc.removeEventListener('click', onClick, true); } catch(_){}
+      try { doc.removeEventListener('submit', onSubmit, true); } catch(_){}
+    });
+  }
+
+
+  function withBust(u) {
+    try {
+      const nu = new URL(u, window.location.origin);
+      nu.searchParams.set('_ts', Date.now());
+      return nu.toString();
+    } catch (_) {
+      return u + (u.includes('?') ? '&' : '?') + '_ts=' + Date.now();
+    }
+  }
+
+
+    function openImgModal(imgEl, doc) {
+        // абсолютный путь картинки (с учётом base URL документа iframe)
+        let src = imgEl.getAttribute('src') || '';
+        let absUrl;
+        try {
+          absUrl = new URL(src, doc.location.href);
+        } catch (_) {
+          absUrl = null;
+        }
+        // вычислим относительный путь внутри сабсайта (если получается)
+        const basePrefix = `/users/${userId}/sites/${siteId}/${subDir}/`;
+        let relPath = '';
+        if (absUrl && absUrl.pathname.startsWith(basePrefix)) {
+          relPath = absUrl.pathname.slice(basePrefix.length);
+        } else {
+          relPath = src;
+        }
+
+        currentImageRelPath = relPath; // сохраняем для операций
+        imgMeta.textContent = `Изображение: ${relPath || src}`;
+
+        imgPreview.onload = () => {
+          try {
+            const w = imgPreview.naturalWidth || 0;
+            const h = imgPreview.naturalHeight || 0;
+            imgSize.textContent = `Размеры: ${w} × ${h}`;
+          } catch(_) {
+            imgSize.textContent = 'Размеры: — × —';
+          }
+        };
+        imgPreview.src = absUrl ? absUrl.toString() : src;
+
+        openModal(modalImg);
+      }
+
+
+  function openTextModal(el, doc) {
+    textMeta.textContent = `Элемент: <${el.tagName.toLowerCase()}>`;
+    textEditContent.value = el.textContent.trim();
+    openModal(modalText);
+  }
+
+  function setEditMode(on) {
+    state.editMode = !!on;
+    if (editToggleBtn) {
+      editToggleBtn.textContent = on ? 'Выключить режим редактирования' : 'Включить режим редактирования';
+    }
+    const doc = previewFrame?.contentDocument || previewFrame?.contentWindow?.document;
+    if (!doc) return;
+
+    if (on) {
+      injectEditStyle(doc);
+      markEditableElements(doc);
+      markEditableImages(doc);
+      bindIframeHandlers(doc);
+    } else {
+      state.cleanupFns.forEach(fn => { try { fn(); } catch(_){} });
+      state.cleanupFns = [];
+      unmarkEditable(doc);
+      state.currentTextEl = null;
+    }
+  }
+
+  function currentRelativePath() {
+    const doc = previewFrame?.contentWindow;
+    if (!doc) return 'index.html';
+    let p = (doc.location && doc.location.pathname) || '';
+    // ожидаем /users/<uid>/sites/<site_id>/<subdir>/...
+    const basePrefix = `/users/${userId}/sites/${siteId}/${subDir}/`;
+    if (p.startsWith(basePrefix)) {
+      p = p.slice(basePrefix.length);
+    }
+    if (!p || p.endsWith('/')) p = (p || '') + 'index.html';
+    return p;
+  }
+
+  async function saveTextToBackend(selector, text) {
+    const rel = currentRelativePath();
+    const url = `/api/subsite/${subId}/update_text/`;
+    const payload = { file: rel, selector, text };
+
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': getCookie('csrftoken'),
+      },
+      body: JSON.stringify(payload),
+    });
+    return resp.json();
+  }
+
+  if (textEditSaveBtn) {
+    textEditSaveBtn.addEventListener('click', async () => {
+      const el = state.currentTextEl;
+      const doc = previewFrame?.contentDocument || previewFrame?.contentWindow?.document;
+      if (!el || !doc || subId === null) { closeModal(modalText); return; }
+
+      const newText = textEditContent.value;
+
+      // Вычислить селектор
+      const selector = cssPathFor(el, doc);
+
+      // Локально применим изменение для мгновенного UX
+      el.textContent = newText;
+
+      try {
+        const res = await saveTextToBackend(selector, newText);
+        if (!res.status) {
+          alert(res.error || 'Ошибка сохранения');
+          return;
+        }
+        // Обновим iframe против кэша
+        try {
+          const u = new URL(previewFrame.src, window.location.origin);
+          u.searchParams.set('_ts', Date.now());
+          previewFrame.src = u.toString();
+        } catch (e) {
+          previewFrame.src = previewFrame.src;
+        }
+      } catch (e) {
+        alert('Ошибка сети при сохранении');
+      } finally {
+        closeModal(modalText);
+      }
+    });
+  }
+
+  if (editToggleBtn) {
+    editToggleBtn.addEventListener('click', () => setEditMode(!state.editMode));
+  }
+  if (previewFrame) {
+    previewFrame.addEventListener('load', () => {
+      if (state.editMode) setEditMode(true);
+    });
+  }
+
+ if (imgUploadBtn) {
+    imgUploadBtn.addEventListener('click', async () => {
+      if (!subId || !currentImageRelPath) return;
+      const file = imgUploadFile?.files?.[0];
+      if (!file) { alert('Выберите файл'); return; }
+
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('rel_path', currentImageRelPath);
+
+      try {
+        const resp = await fetch(`/api/subsite/${subId}/replace_image/`, {
+          method: 'POST',
+          headers: { 'X-CSRFToken': getCookie('csrftoken') },
+          body: fd
+        });
+        const data = await resp.json();
+        if (!data.status) { alert(data.error || 'Ошибка замены'); return; }
+
+        // Обновить превью в модалке
+        imgPreview.src = withBust(data.file_url);
+
+        // Обновить картинку в iframe, если есть прямой элемент
+        if (state.currentImgEl) {
+          try {
+            const u = new URL(state.currentImgEl.src, (previewFrame?.contentWindow?.location?.href) || window.location.origin);
+            u.searchParams.set('_ts', Date.now());
+            state.currentImgEl.src = u.toString();
+          } catch(_) {
+            state.currentImgEl.src = withBust(state.currentImgEl.src);
+          }
+        } else {
+          // Перезагрузить iframe как запасной вариант
+          try {
+            const u = new URL(previewFrame.src, window.location.origin);
+            u.searchParams.set('_ts', Date.now());
+            previewFrame.src = u.toString();
+          } catch(_) {
+            previewFrame.src = previewFrame.src;
+          }
+        }
+
+      } catch (e) {
+        alert('Ошибка сети при загрузке файла');
+      }
+    });
+  }
+
+if (imgUrlBtn) {
+    imgUrlBtn.addEventListener('click', async () => {
+      if (!subId || !currentImageRelPath) return;
+      const url = (imgUrlInput?.value || '').trim();
+      if (!url) { alert('Укажите URL'); return; }
+
+      try {
+        const resp = await fetch(`/api/subsite/${subId}/replace_image_by_url/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken')
+          },
+          body: JSON.stringify({ rel_path: currentImageRelPath, url })
+        });
+        const data = await resp.json();
+        if (!data.status) { alert(data.error || 'Ошибка замены по URL'); return; }
+
+        // Обновить превью в модалке
+        imgPreview.src = withBust(data.file_url);
+
+        // Обновить картинку в iframe
+        if (state.currentImgEl) {
+          try {
+            const u = new URL(state.currentImgEl.src, (previewFrame?.contentWindow?.location?.href) || window.location.origin);
+            u.searchParams.set('_ts', Date.now());
+            state.currentImgEl.src = u.toString();
+          } catch(_) {
+            state.currentImgEl.src = withBust(state.currentImgEl.src);
+          }
+        } else {
+          try {
+            const u = new URL(previewFrame.src, window.location.origin);
+            u.searchParams.set('_ts', Date.now());
+            previewFrame.src = u.toString();
+          } catch(_) {
+            previewFrame.src = previewFrame.src;
+          }
+        }
+
+      } catch (e) {
+        alert('Ошибка сети при замене по URL');
+      }
+    });
+  }
+
+})();
+</script>
+
 {% endblock %}

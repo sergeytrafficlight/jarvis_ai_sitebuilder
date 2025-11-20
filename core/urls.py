@@ -19,6 +19,9 @@ urlpatterns = [
 
     path("sites/<int:site_id>/", views.site_detail, name="site_detail"),
     path("api/subsite/<int:sub_id>/tasks_status/", views.subsite_tasks_status, name="subsite_tasks_status"),
+    path("api/subsite/<int:sub_id>/update_text/", views.subsite_update_text, name="subsite_update_text"),
 
-
+    path("api/subsite/<int:sub_id>/replace_image/", views.subsite_replace_image, name="subsite_replace_image"),
+    path("api/subsite/<int:sub_id>/replace_image_by_url/", views.subsite_replace_image_by_url,
+         name="subsite_replace_image_by_url"),
 ]

@@ -1,0 +1,19 @@
+<div class="modal-overlay" id="modal_edit_text" hidden>
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Редактирование текста</h3>
+      <button class="modal-close" data-close="#modal_edit_text">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:grid;gap:10px;">
+        <div class="muted" id="textMeta"></div>
+        <label><strong>Текст</strong></label>
+        <textarea id="textEditContent" class="textarea" rows="6"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" id="textEditSaveBtn">Сохранить</button>
+      <button class="btn btn-secondary" data-close="#modal_edit_text">Отмена</button>
+    </div>
+  </div>
+</div>

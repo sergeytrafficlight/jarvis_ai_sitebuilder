@@ -1,8 +1,10 @@
 import uuid
 import os
+import shutil
 from urllib.parse import urlparse
 from django.contrib.auth.models import User
 from config import DIR_USER_PREFIX, DIR_IMAGES_PREFIX, DIR_SITES_PREFIX
+
 from sitebuilder.settings import USER_FILES_ROOT
 import re
 import json
@@ -29,16 +31,37 @@ def get_subsite_dir(subsite: 'SubSiteProject'):
     return dir
 
 
-def generate_uniq_subsite_dir_for_site(site: 'SiteProject'):
+def generate_uniq_subsite_dir_for_site(site: 'SiteProject', create_dir = True):
     base_dir = get_sites_path_for_user(site.user)
     base_dir += f"/{site.id}"
     uniq = str(uuid.uuid4())
     name = uniq
     path = os.path.join(base_dir, name)
-    os.makedirs(path, exist_ok=False)
+    if create_dir:
+        os.makedirs(path, exist_ok=False)
     return (path, uniq)
 
 
+def clone_sub_site(sub_site: 'SubSiteProject'):
+
+    current_dir = get_subsite_dir(sub_site)
+    new_dir, uniq_dir = generate_uniq_subsite_dir_for_site(sub_site.site, create_dir=False)
+
+    logger.debug(f"dir {current_dir} -> {new_dir}")
+
+    from core.models import SubSiteProject
+    new_sub_site = SubSiteProject.objects.create(
+        site=sub_site.site,
+        root_sub_site=sub_site,
+        dir=uniq_dir,
+    )
+
+    current = Path(current_dir)
+    new = Path(new_dir)
+
+    shutil.copytree(current, new)
+
+    return new_sub_site
 
 
 def is_valid_http_url(url: str) -> bool:

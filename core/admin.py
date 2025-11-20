@@ -4,13 +4,13 @@ from .models import Profile, Transaction, SiteProject, SystemPrompts, AICommunic
 
 @admin.register(Profile)
 class ProfileAdmin(admin.ModelAdmin):
-    list_display = ("user", "balance")
+    list_display = ("user",)
     search_fields = ("user__username", "user__email")
 
 
 @admin.register(Transaction)
 class TransactionAdmin(admin.ModelAdmin):
-    list_display = ("user", "type", "amount", "created_at", "description")
+    list_display = ("user", "type", "amount_client", "amount_ai", "created_at", "description")
     list_filter = ("type", "created_at")
     search_fields = ("user__username", "user__email", "description")
 
@@ -23,7 +23,7 @@ class SiteProjectAdmin(admin.ModelAdmin):
 
 @admin.register(SubSiteProject)
 class SubSiteProjectAdmin(admin.ModelAdmin):
-    list_display = ("site", "root_sub_site", "created_at", "dir", "status", "error")
+    list_display = ("site", "root_sub_site", "created_at", "dir", "error")
     list_filter = []
     search_fields = []
 

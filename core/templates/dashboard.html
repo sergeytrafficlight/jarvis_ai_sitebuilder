@@ -33,6 +33,7 @@
                     <th></th>
                     <th>{% trans "Название" %}</th>
                     <th>{% trans "Создан" %}</th>
+                    <th>{% trans "Расход" %}</th>
                     <th>{% trans "Действия" %}</th>
                 </tr>
             </thead>
@@ -45,6 +46,7 @@
                     </td>
                     <td>{{ s.name }}</td>
                     <td>{{ s.created_at|date:"d.m.Y H:i" }}</td>
+                    <td>{{ s.get_balance|default:0|floatformat:6 }}</td>
                     <td>
                         <a class="btn btn-secondary" href="{% url 'site_detail' s.id %}">{% trans "Открыть" %}</a>
                         <button class="btn btn-secondary btn-delete-one" data-id="{{ s.id }}">{% trans "Удалить" %}</button>

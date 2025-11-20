@@ -2,10 +2,6 @@ from core.models import SiteProject, MyTask, AICommunicationLog
 import ai.chatgpt as chatgpt
 from ai.ai_answer import ai_answer
 
-class ai_answer:
-
-    def __init__(self):
-        pass
 
 def ai_log(task: MyTask, prompt: str):
     return AICommunicationLog.objects.create(
@@ -29,3 +25,6 @@ def get_text2text_answer(prompt: str, creative_enabled=False, model: str = ''):
 
 def get_text2img_answer(prompt: str, input_image_path: str, creative_enabled=False):
     return chatgpt.get_text2img_answer(prompt, input_image_path, creative_enabled)
+
+def get_edit_image_conversation(prompt: str, input_image:str):
+    return chatgpt.get_edit_image_conversation(prompt, input_image)

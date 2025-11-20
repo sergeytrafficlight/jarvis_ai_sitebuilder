@@ -13,6 +13,7 @@ from core.task_wrapper import task_generate_image
 from config import THREADS_PARALLEL_MAX_COUNT, SITE_URL
 from core.screenshot import generate_screenshort
 from core.site_analyzer import SiteAnalyzer
+from core.funds_balance import charge
 
 from core.log import *
 logger.setLevel(logging.DEBUG)
@@ -57,6 +58,7 @@ def run_task_generate_name(task: MyTask):
     task.sub_site.site.name = answer.answer
     task.sub_site.site.save(update_fields=['name'])
 
+    charge(task.sub_site, answer, task.type)
 
     logger.debug(f"Done: {answer.answer}")
 
@@ -101,9 +103,12 @@ def run_task_generate_site(task: MyTask):
 
     logger.debug(f"Dir {dir}")
 
+    charge(task.sub_site, answer, task.type)
     ai_log_update(log, answer)
 
     run_task_generate_site_parse_answer(task, answer.answer)
+
+
 
 def run_task_geneate_image(task: MyTask):
 
@@ -169,6 +174,8 @@ def run_task_geneate_image(task: MyTask):
     file_path = get_subsite_dir(task.sub_site) + "/" + file_path
     with open(file_path, "wb") as f:
         f.write(answer.answer)
+
+    charge(task.sub_site, answer, task.type)
     ai_log_update(log, answer)
 
 

@@ -6,7 +6,7 @@ from openai import OpenAI, APITimeoutError
 from config import AI_PROXY, CHATGPT_API_KEY
 from ai.ai_answer import ai_answer
 from core.models import AIModelsSettings
-from core.models import MODEL_CHATGPT_5_1, MODEL_CHATGPT_IMG_1
+from core.models import MODEL_CHATGPT_5_1, MODEL_CHATGPT_IMG_1, MODEL_CHATGPT_5
 from core.models import TYPE_CHATGPT
 
 HTTP_TIMEOUT = 60.0 * 20
@@ -111,3 +111,69 @@ def get_text2img_answer(
 
     return answer
 
+def get_edit_image_conversation(prompt: str, input_image_path:str):
+
+        def _create_file(client, file_path):
+            with open(file_path, 'rb') as f:
+                result = client.files.create(
+                    file=f,
+                    purpuse='edit',
+                )
+                return result.id
+            
+        model = MODEL_CHATGPT_5
+
+        ai_settings = AIModelsSettings.objects.get(type=TYPE_CHATGPT, model=model)
+
+        if len(AI_PROXY):
+            http_client = httpx.Client(
+                proxy=AI_PROXY,
+                timeout=httpx.Timeout(HTTP_TIMEOUT)
+            )
+        else:
+            http_client = httpx.Client(timeout=httpx.Timeout(HTTP_TIMEOUT))
+
+        client = OpenAI(
+            api_key=CHATGPT_API_KEY,
+            http_client=http_client
+        )
+
+        with open(input_image_path, "rb") as f:
+            image_b64 = base64.b64encode(f.read()).decode("utf-8")
+
+        response = client.responses.create(
+            model=model,
+            input=[
+                {
+                    'role': 'user',
+                    'content': [
+                        {'type': 'input_text', 'text': prompt},
+                        {'id': 'input_image_path', 'type': 'input_image', "image_url": f"data:image/jpeg;base64,{image_b64}",}
+                    ]
+                }
+            ],
+            tools=[{"type": "image_generation"}],
+        )
+
+        image_generation_calls = [
+            output
+            for output in response.output
+            if output.type == "image_generation_call"
+        ]
+        image_data = [output.result for output in image_generation_calls]
+
+        comment = ''
+        if not image_data:
+            comment = response.output.content
+        # todo there is no tokens
+
+        answer = ai_answer(
+            ai_settings=ai_settings,
+            answer=base64.b64decode(image_data[0]),
+            comment=comment,
+            prompt_tokens=100,
+            completion_tokens=100,
+            response_id=response.id,
+        )
+
+        return answer

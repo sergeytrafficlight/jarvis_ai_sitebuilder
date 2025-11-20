@@ -5,7 +5,6 @@ from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.utils.translation import gettext_lazy as _
 from django.core.validators import MinValueValidator
-
 from core.tools import get_image_path_for_user
 
 
@@ -33,7 +32,10 @@ MODEL_CHOICES = (
 
 class Profile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="profile")
-    balance = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+
+    def get_balance(self):
+        from core.funds_balance import balance
+        return balance(user=self.user)
 
     def __str__(self):
         return f"Profile({self.user.username})"
@@ -47,19 +49,68 @@ class Transaction(models.Model):
         (TYPE_CHARGE, _("Списание")),
     )
 
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="transactions")
-    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    user = models.ForeignKey(User, on_delete=models.PROTECT, related_name="transactions")
+    amount_client = models.DecimalField(max_digits=10, decimal_places=6)
+    amount_ai = models.DecimalField(max_digits=10, decimal_places=6)
     type = models.CharField(max_length=10, choices=TYPE_CHOICES)
     description = models.CharField(max_length=255, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    sub_site = models.ForeignKey('SubSiteProject', on_delete=models.SET_NULL, null=True, blank=True, default=None, related_name="transactions")
 
     class Meta:
         ordering = ["-created_at"]
 
     def __str__(self):
-        sign = "+" if self.type == self.TYPE_TOPUP else "-"
-        return f"{self.user.email} {sign}{self.amount} {self.created_at:%Y-%m-%d}"
 
+        return f"{self.user.email} {self.amount} {self.created_at:%Y-%m-%d}"
+
+
+class MyTask(models.Model):
+
+    STATUS_AWAITING = "awaiting"
+    STATUS_PROCESSING = "processing"
+    STATUS_DONE = "done"
+    STATUS_ERROR = "error"
+
+    STATUS_CHOICES = (
+        (STATUS_AWAITING, _("Ожидает")),
+        (STATUS_PROCESSING, _("Выполняется")),
+        (STATUS_DONE, _("Готов")),
+        (STATUS_ERROR, _("Ошибка")),
+    )
+
+
+    TYPE_GENERATE_NAME = 'generate_name'
+    TYPE_GENERATE_SITE = 'generate_site'
+    TYPE_GENERATE_IMAGE = 'generate_image'
+
+    TYPE_CHOICES = (
+        (TYPE_GENERATE_NAME, _("Генерация имени")),
+        (TYPE_GENERATE_SITE, _("Генерация сайта")),
+        (TYPE_GENERATE_IMAGE, _("Генерация изображения")),
+    )
+
+    sub_site = models.ForeignKey('SubSiteProject', on_delete=models.PROTECT, related_name="task")
+    name = models.CharField(max_length=255)
+    type = models.CharField(max_length=20, choices=TYPE_CHOICES)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_AWAITING)
+    message = models.TextField(blank=True, null=True)
+
+    data_payload = models.JSONField(
+        default=dict,
+        blank=True,
+        null=True
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.name} ({self.id}) - {self.status}"
 
 class SiteProject(models.Model):
 
@@ -72,6 +123,9 @@ class SiteProject(models.Model):
     prompt = models.TextField()
     ref_site_url = models.URLField(max_length=500, blank=True, null=True)
 
+    def get_balance(self):
+        from core.funds_balance import balance
+        return balance(site=self)
 
     class Meta:
         ordering = ["-created_at"]
@@ -81,17 +135,6 @@ class SiteProject(models.Model):
 
 class SubSiteProject(models.Model):
 
-    STATUS_AWAITING = "awaiting"
-    STATUS_PROCESSING = "processing"
-    STATUS_DONE = "done"
-    STATUS_ERROR = "error"
-    STATUS_CHOICES = (
-        (STATUS_AWAITING, _("Ожидает")),
-        (STATUS_PROCESSING, _("Выполняется")),
-        (STATUS_DONE, _("Готов")),
-        (STATUS_ERROR, _("Ошибка")),
-    )
-
     site = models.ForeignKey(SiteProject, on_delete=models.CASCADE, related_name="sub_site")
     root_sub_site = models.ForeignKey('SubSiteProject', on_delete=models.CASCADE, related_name="sub_site", blank=True, null=True)
 
@@ -100,8 +143,24 @@ class SubSiteProject(models.Model):
 
     dir = models.CharField(max_length=64)
 
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_AWAITING)
     error = models.TextField(null=True, blank=True)
+
+    def get_status(self):
+
+        awaiting_processing = False
+        for t in self.task.all():
+            if t.status == MyTask.STATUS_ERROR:
+                return t.status
+            if t.status in [MyTask.STATUS_AWAITING, MyTask.STATUS_PROCESSING]:
+                awaiting_processing = True
+
+        if awaiting_processing:
+            return MyTask.STATUS_PROCESSING
+        return MyTask.STATUS_DONE
+
+    def get_balance(self):
+        from core.funds_balance import balance
+        return balance(sub_site=self)
 
 
 
@@ -138,52 +197,6 @@ class SystemPrompts(models.Model):
 
 
 
-class MyTask(models.Model):
-
-    STATUS_AWAITING = "awaiting"
-    STATUS_PROCESSING = "processing"
-    STATUS_DONE = "done"
-    STATUS_ERROR = "error"
-
-    STATUS_CHOICES = (
-        (STATUS_AWAITING, _("Ожидает")),
-        (STATUS_PROCESSING, _("Выполняется")),
-        (STATUS_DONE, _("Готов")),
-        (STATUS_ERROR, _("Ошибка")),
-    )
-
-
-    TYPE_GENERATE_NAME = 'generate_name'
-    TYPE_GENERATE_SITE = 'generate_site'
-    TYPE_GENERATE_IMAGE = 'generate_image'
-
-    TYPE_CHOICES = (
-        (TYPE_GENERATE_NAME, _("Генерация имени")),
-        (TYPE_GENERATE_SITE, _("Генерация сайта")),
-        (TYPE_GENERATE_IMAGE, _("Генерация изображения")),
-    )
-
-    sub_site = models.ForeignKey(SubSiteProject, on_delete=models.PROTECT, related_name="task")
-    name = models.CharField(max_length=255)
-    type = models.CharField(max_length=20, choices=TYPE_CHOICES)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_AWAITING)
-    message = models.TextField(blank=True, null=True)
-
-    data_payload = models.JSONField(
-        default=dict,
-        blank=True,
-        null=True
-    )
-
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        ordering = ['-created_at']
-
-    def __str__(self):
-        return f"{self.name} ({self.id}) - {self.status}"
-
 class AICommunicationLog(models.Model):
     task = models.ForeignKey(MyTask, on_delete=models.PROTECT, related_name="log")
     ai_type = models.CharField(max_length=20, choices=TYPE_CHOICES, null=True, blank=True, default=None)
@@ -213,3 +226,20 @@ class AIModelsSettings(models.Model):
             ("type", "model"),
         ]
 
+class ImageAIEdit(models.Model):
+    sub_site = models.ForeignKey(SubSiteProject, on_delete=models.CASCADE, related_name="image_ai")
+
+    file_path = models.CharField(max_length=256)
+
+    class Meta:
+        unique_together = [
+            ("sub_site", "file_path"),
+        ]
+
+class ImageAIEditConversation(models.Model):
+
+    image_ai_edit = models.ForeignKey(ImageAIEdit, on_delete=models.CASCADE, related_name="image_ai")
+    prompt = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    answer_id = models.CharField(max_length=256)
