@@ -628,3 +628,29 @@ def site_download_latest(request, site_id: int):
     if not sub:
         raise Http404("No subsites for this site")
     return subsite_download(request, sub.id)
+
+@login_required
+@require_POST
+def site_correction_submit(request, site_id: int):
+    # Пытаемся распарсить как JSON
+    prompt = ""
+    if request.content_type and "application/json" in request.content_type:
+        try:
+            payload = json.loads(request.body.decode("utf-8"))
+            prompt = (payload.get("prompt") or "").strip()
+        except Exception:
+            prompt = ""
+    else:
+        prompt = (request.POST.get("prompt") or "").strip()
+
+    if not prompt:
+        return JsonResponse({"ok": False, "error": "Текст запроса пустой"}, status=400)
+
+    # TODO: твоя логика обработки запроса пользователя по site_id и prompt
+    # Пример заглушки успешного ответа:
+    return JsonResponse({
+        "ok": True,
+        "message": "Запрос принят",
+        "site_id": site_id,
+        # "result": ...
+    })
