@@ -12,10 +12,25 @@ def task_generate_site_name_classification(sub_site: SubSiteProject):
         type=MyTask.TYPE_GENERATE_NAME,
     )
 
-def task_generate_site(sub_site: SubSiteProject):
+def task_generate_site(sub_site: SubSiteProject, prompt: str):
+    payload = {
+        'prompt': prompt,
+    }
     return MyTask.objects.create(
         sub_site=sub_site,
         type=MyTask.TYPE_GENERATE_SITE,
+        data_payload=payload,
+    )
+
+def task_edit_file(sub_site: SubSiteProject, prompt: str, file_path: str):
+    payload = {
+        'path': file_path,
+        'prompt': prompt,
+    }
+    return MyTask.objects.create(
+        sub_site=sub_site,
+        type=MyTask.TYPE_EDIT_FILE,
+        data_payload=payload,
     )
 
 def task_generate_image(sub_site: SubSiteProject, path: str, prompt: str):
@@ -36,5 +51,16 @@ def task_edit_image(sub_site: SubSiteProject, ai_edit_conversation: ImageAIEditC
     )
     ai_edit_conversation.task = task
     ai_edit_conversation.save(update_fields=['task'])
+    return task
+
+def task_edit_site(sub_site: SubSiteProject, prompt: str):
+    payload = {
+        'prompt': prompt
+    }
+    task = MyTask.objects.create(
+        sub_site=sub_site,
+        data_payload=payload,
+        type=MyTask.TYPE_EDIT_SITE,
+    )
     return task
 

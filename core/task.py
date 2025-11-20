@@ -93,7 +93,7 @@ def run_task_generate_site(task: MyTask):
     prompt += "\n"
     prompt += SystemPrompts.objects.get(type=SystemPrompts.SP_NAME_BASE_JSON).prompt
     prompt += "\nЗапрос пользователя для генерации html сайта:\n"
-    prompt += task.sub_site.site.prompt
+    prompt += task.prompt
 
     log = ai_log(task, prompt)
 
@@ -107,6 +107,48 @@ def run_task_generate_site(task: MyTask):
     ai_log_update(log, answer)
 
     run_task_generate_site_parse_answer(task, answer.answer)
+
+def run_task_edit_file(task: MyTask):
+
+    payload = task.data_payload
+    user_prompt = payload['prompt']
+    file_path = payload['path']
+
+    dir = get_subsite_dir(task.sub_site)
+    full_file_path = f"{dir}/{file_path}"
+
+    prompt = SystemPrompts.objects.get(type=SystemPrompts.SP_NAME_BASE).prompt
+    prompt += "\n"
+    prompt += SystemPrompts.objects.get(type=SystemPrompts.SP_NAME_BASE_JSON).prompt
+    prompt += "\nПользователь запросил коррекцию следующего файла\n"
+    prompt += "\nПуть: " + file_path
+
+    with open(full_file_path, 'r') as f:
+        file_body = f.read()
+
+    prompt += f"\nТело файла (BEGIN)\n"
+    prompt += file_body
+    prompt += f"\nТело файла (END)\n"
+
+
+    prompt += "\nЗапрос пользователя редактирование страницы:\n"
+    prompt += user_prompt
+
+    log = ai_log(task, prompt)
+
+    logger.debug(f"edit_file")
+    print(f"PROMPT")
+    print(prompt)
+    answer = get_text2text_answer(prompt)
+    logger.debug(f"done")
+
+    logger.debug(f"Dir {dir}")
+
+    charge(task.sub_site, answer, task.type)
+    ai_log_update(log, answer)
+
+    run_task_generate_site_parse_answer(task, answer.answer)
+
 
 
 
@@ -221,6 +263,47 @@ def run_task_edit_image(task: MyTask):
     charge(task.sub_site, answer, task.type)
     ai_log_update(log, answer)
 
+def run_task_edit_site(task: MyTask):
+    logger.debug(f"run edit site: {task.id}")
+
+    user_prompt = task.data_payload['prompt']
+
+    prompt = SystemPrompts.objects.get(type=SystemPrompts.SP_NAME_BASE).prompt
+    prompt += SystemPrompts.objects.get(type=SystemPrompts.SP_NAME_SITE_EDIT_MAKE_PLAN).prompt
+
+    site_dir = get_subsite_dir(task.sub_site)
+
+    site_analyzer = SiteAnalyzer(site_dir)
+    site_analyze_result = site_analyzer.analyze()
+
+    prompt += "\nСтруктура сайта (BEGIN)\n"
+    for file, info in site_analyze_result.items():
+        prompt += str(info['relative']) + "\n"
+        prompt += str(info) + "\n"
+    prompt += "Структура сайта (END)\n"
+
+    prompt += "\nЗапрос пользователя:\n"
+    prompt += user_prompt
+
+
+    print(f"Промт")
+    print(prompt)
+    log = ai_log(task, prompt)
+
+
+    answer = get_text2text_answer(prompt)
+
+    charge(task.sub_site, answer, task.type)
+    ai_log_update(log, answer)
+
+    print(f"Answer")
+    print(answer.answer)
+
+
+
+
+
+
 
 class ParallelTasks:
 
@@ -300,6 +383,7 @@ def run_tasks_ex_cycle(sub_site_id: int):
             if t.type in [
                 MyTask.TYPE_GENERATE_SITE,
                 MyTask.TYPE_GENERATE_NAME,
+                MyTask.TYPE_EDIT_FILE,
             ]:
                 task_queue_serial.append(t)
             elif t.type in [
@@ -320,6 +404,8 @@ def run_tasks_ex_cycle(sub_site_id: int):
                     run_task_generate_name(t)
                 elif t.type == MyTask.TYPE_GENERATE_SITE:
                     run_task_generate_site(t)
+                elif t.type == MyTask.TYPE_EDIT_FILE:
+                    run_task_edit_file(t)
                 else:
                     raise Exception(f"Unknown task ({t.id}) type {t.type}")
 

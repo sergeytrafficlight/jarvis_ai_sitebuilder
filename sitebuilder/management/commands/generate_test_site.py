@@ -33,7 +33,7 @@ class Command(BaseCommand):
 
 
         task_generate_site_name_classification(sub_site)
-        task_generate_site(sub_site)
+        task_generate_site(sub_site, prompt)
 
         run_tasks_ex(sub_site.id)
 

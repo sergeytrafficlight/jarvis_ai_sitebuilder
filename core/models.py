@@ -85,12 +85,16 @@ class MyTask(models.Model):
     TYPE_GENERATE_SITE = 'generate_site'
     TYPE_GENERATE_IMAGE = 'generate_image'
     TYPE_EDIT_IMAGE = 'edit_image'
+    TYPE_EDIT_SITE = 'edit_site'
+    TYPE_EDIT_FILE = 'edit_file'
 
     TYPE_CHOICES = (
         (TYPE_GENERATE_NAME, _("Генерация имени")),
         (TYPE_GENERATE_SITE, _("Генерация сайта")),
         (TYPE_GENERATE_IMAGE, _("Генерация изображения")),
         (TYPE_EDIT_IMAGE, _("Редактирование изображения")),
+        (TYPE_EDIT_SITE, _("Редактирование сайта")),
+        (TYPE_EDIT_FILE, _("Редактирование файла")),
 
     )
 

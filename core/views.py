@@ -271,7 +271,7 @@ def create_site_task(request):
 
         # Запишем задачу в MyTask
         task_generate_site_name_classification(sub_site)
-        task_generate_site(sub_site)
+        task_generate_site(sub_site, prompt=prompt)
 
         run_tasks.apply_async(args=[sub_site.id])
 
