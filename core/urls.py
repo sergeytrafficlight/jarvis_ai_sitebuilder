@@ -24,4 +24,13 @@ urlpatterns = [
     path("api/subsite/<int:sub_id>/replace_image/", views.subsite_replace_image, name="subsite_replace_image"),
     path("api/subsite/<int:sub_id>/replace_image_by_url/", views.subsite_replace_image_by_url,
          name="subsite_replace_image_by_url"),
+
+    path("api/subsite/<int:sub_id>/image_ai/conversations/", views.image_ai_conversations,
+         name="image_ai_conversations"),
+    path("api/subsite/<int:sub_id>/image_ai/create/", views.image_ai_create, name="image_ai_create"),
+    path("api/site/<int:site_id>/tasks_status/", views.site_tasks_status, name="site_tasks_status"),
+
+    path("sites/<int:site_id>/download/", views.site_download_latest, name="site_download_latest"),
+    path("subsites/<int:sub_id>/download/", views.subsite_download, name="subsite_download"),
+
 ]

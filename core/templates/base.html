@@ -22,10 +22,16 @@
                 <a href="/billing/">{% trans "История биллинга" %}</a>
                 <a class="btn btn-primary" href="/topup/">{% trans "Пополнить" %}</a>
             </nav>
-            <div class="user-info">
-                <span class="user-email">{{ request.user.email|default:request.user.username }}</span>
-                <a class="btn btn-secondary" href="/logout/">{% trans "Выйти" %}</a>
-            </div>
+              <div class="user-info">
+                  <a class="user-balance" href="{% url 'billing_history' %}">
+                      {% trans "Баланс" %}: {{ request.user.profile.get_balance|default:0|floatformat:2 }} USD
+                  </a>
+                  <span class="user-email">{{ request.user.email|default:request.user.username }}</span>
+                  <a class="btn btn-secondary" href="/logout/">{% trans "Выйти" %}</a>
+              </div>
+
+
+
             {% endif %}
             <form method="post" action="{% url 'set_language' %}" style="margin-left:12px;">
                 {% csrf_token %}

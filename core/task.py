@@ -4,8 +4,8 @@ import requests
 import threading
 from celery import shared_task, Task
 from ai.ai import ai_log, ai_log_update
-from core.models import SiteProject, MyTask, SystemPrompts, SubSiteProject
-from ai.ai import get_text2text_answer, get_text2img_answer
+from core.models import SiteProject, MyTask, SystemPrompts, SubSiteProject, ImageAIEditConversation, ImageAIEdit
+from ai.ai import get_text2text_answer, get_text2img_answer, get_edit_image_conversation
 from core.tools import get_subsite_dir, extract_json_from_text
 from core.tools import ProcessFileResult
 from django.urls import reverse
@@ -170,7 +170,7 @@ def run_task_geneate_image(task: MyTask):
     prompt += f"\nпуть к файлу: {file_path}"
 
     log = ai_log(task, prompt)
-    answer = get_text2img_answer(prompt=prompt,input_image_path=screenshot_path, creative_enabled=True)
+    answer = get_edit_image_conversation(prompt=prompt,input_image=screenshot_path, last_answer_id=None)
     file_path = get_subsite_dir(task.sub_site) + "/" + file_path
     with open(file_path, "wb") as f:
         f.write(answer.answer)
@@ -178,6 +178,48 @@ def run_task_geneate_image(task: MyTask):
     charge(task.sub_site, answer, task.type)
     ai_log_update(log, answer)
 
+def run_task_edit_image(task: MyTask):
+
+    logger.debug(f"edit image, task: {task.id}")
+    #logger.debug(f"payload: {task.data_payload}")
+
+    conv = ImageAIEditConversation.objects.get(task=task)
+    img_db = conv.image_ai_edit
+
+    prompt = conv.prompt
+
+    latest_conv = ImageAIEditConversation.objects.exclude(id=conv.id)
+    if latest_conv.exists():
+        latest_conv = latest_conv.latest('created_at')
+    else:
+        latest_conv = None
+
+    logger.debug(f"latest conv: {latest_conv}")
+
+    full_path = get_subsite_dir(task.sub_site)
+    full_path += f"/{img_db.file_path}"
+
+    logger.debug(f"full path: {full_path}")
+
+
+    prev_answer_id = None
+    if latest_conv:
+        prev_answer_id = latest_conv.answer_id
+
+    logger.debug(f"prev answer id: {prev_answer_id}")
+
+    log = ai_log(task, prompt)
+    answer = get_edit_image_conversation(prompt, full_path, prev_answer_id)
+
+    conv.answer_id = answer.response_id
+    conv.save(update_fields=['answer_id'])
+
+    if len(answer.answer):
+        with open(full_path, "wb") as f:
+            f.write(answer.answer)
+
+    charge(task.sub_site, answer, task.type)
+    ai_log_update(log, answer)
 
 
 class ParallelTasks:
@@ -214,11 +256,15 @@ def run_tasks_ex_thread(tasks):
         try:
             if t.type == MyTask.TYPE_GENERATE_IMAGE:
                 run_task_geneate_image(t)
+            elif t.type == MyTask.TYPE_EDIT_IMAGE:
+                run_task_edit_image(t)
             else:
+                logger.error("Exception occurred:\n%s", traceback.format_exc())
                 raise Exception(f"Unknown task type {t.type}")
         except Exception as e:
+            logger.error("Exception occurred:\n%s", traceback.format_exc())
             t.status = MyTask.STATUS_ERROR
-            t.error = str(e)
+            t.message = str(e)
             t.save()
             continue
 
@@ -237,7 +283,6 @@ def run_tasks_ex_cycle(sub_site_id: int):
 
         logger.debug(f"subsite: {sub_site}")
 
-        sub_site.status = SubSiteProject.STATUS_PROCESSING
         sub_site.save()
 
         tasks = MyTask.objects.filter(sub_site=sub_site, status=MyTask.STATUS_AWAITING).order_by('id')
@@ -258,10 +303,12 @@ def run_tasks_ex_cycle(sub_site_id: int):
             ]:
                 task_queue_serial.append(t)
             elif t.type in [
-                MyTask.TYPE_GENERATE_IMAGE
+                MyTask.TYPE_GENERATE_IMAGE,
+                MyTask.TYPE_EDIT_IMAGE,
             ]:
                 task_queue_parallel.tasks.append(t)
             else:
+                logger.error("Exception occurred:\n%s", traceback.format_exc())
                 raise Exception(f"Unknown task ({t.id}) type {t.type}")
 
         for t in task_queue_serial:
@@ -282,13 +329,13 @@ def run_tasks_ex_cycle(sub_site_id: int):
                 logger.debug(f"error: {e}")
                 logger.error("Exception occurred:\n%s", traceback.format_exc())
                 t.status = MyTask.STATUS_ERROR
-                t.error = str(e)
+                t.message = str(e)
                 error = True
                 t.save()
                 break
             else:
                 t.status = MyTask.STATUS_DONE
-                t.error = ''
+                t.message = ''
                 t.save()
 
 
@@ -305,10 +352,7 @@ def run_tasks_ex_cycle(sub_site_id: int):
         for t in threads:
             t.join()
 
-        if error:
-            sub_site.status = SubSiteProject.STATUS_ERROR
-        else:
-            sub_site.status = SubSiteProject.STATUS_DONE
+
 
         sub_site.save()
     except Exception as e:
@@ -326,3 +370,24 @@ def run_tasks_ex(sub_site_id: int):
 @shared_task(bind=True, base=BaseTask, name="core.generate_site")
 def run_tasks(self, sub_site_id: int):
     return run_tasks_ex(sub_site_id)
+
+
+@shared_task(bind=True, base=BaseTask, name="core.recover_stuck_tasks")
+def recover_stuck_tasks(self):
+    # 1) Найдём все "застрявшие" задачи
+    qs = MyTask.objects.filter(status=MyTask.STATUS_PROCESSING)
+    # 2) Переведём их в awaiting
+    updated = qs.update(status=MyTask.STATUS_AWAITING)
+
+    qs = MyTask.objects.filter(status=MyTask.STATUS_AWAITING)
+
+    logger.debug(f"Awaiting tasks: {qs.count()}")
+    sub_ids = list(qs.values_list('sub_site_id', flat=True).distinct())
+
+    # 3) Для каждого sub_site заново запустим основной раннер
+    for sid in sub_ids:
+        logger.debug(f"Run async for sub site id: {sub_ids}")
+        run_tasks.apply_async(args=[sid], countdown=1)
+
+    logger.info(f"Recovered {updated} tasks; scheduled {len(sub_ids)} subsites")
+    return {"updated": updated, "subsites": len(sub_ids)}

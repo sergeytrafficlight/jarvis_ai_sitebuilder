@@ -9,3 +9,4 @@ django-celery-results
 httpx
 openai
 bs4
+Pillow

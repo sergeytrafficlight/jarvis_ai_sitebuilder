@@ -9,8 +9,8 @@ def charge(sub_site: SubSiteProject, ai_answer: ai_answer, description: str = No
 
     Transaction.objects.create(
         user=sub_site.site.user,
-        amount_client=ai_answer.price_for_client,
-        amount_ai=ai_answer.price_for_ai,
+        amount_client=-ai_answer.price_for_client,
+        amount_ai=-ai_answer.price_for_ai,
         type=Transaction.TYPE_CHARGE,
         description=description,
         sub_site=sub_site,

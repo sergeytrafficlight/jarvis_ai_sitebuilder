@@ -38,17 +38,27 @@
       </div>
 
       <!-- Правая колонка: зона для AI-полей -->
-      <div class="modal-right" style="display:flex; flex-direction:column;">
-        <div style="display:flex; flex-direction:column; gap:8px; height:100%;">
-          <label><strong>AI-промт для изображения</strong></label>
-          <textarea id="imgAiPrompt" class="textarea" style="flex:1; min-height:280px;"
-                    placeholder="Опишите желаемые изменения изображения..."></textarea>
+        <div class="modal-right" style="display:flex; flex-direction:column;">
+          <div style="display:flex; flex-direction:column; gap:10px; height:100%; min-height:0;">
+            <label><strong>AI-промт для изображения</strong></label>
+            <textarea id="imgAiNextPrompt" class="textarea" rows="4" placeholder="Опишите следующий запрос к ИИ..."></textarea>
 
-          <label><strong>Доп. параметры</strong></label>
-          <textarea id="imgAiParams" class="textarea" rows="4"
-                    placeholder="Необязательные параметры/заметки..."></textarea>
+            <!-- Пояснение показывается только при активных коммуникациях -->
+            <div id="imgAiLockNotice" class="muted" style="display:none;">
+              Отправка доступна, когда нет активных AI-коммуникаций
+            </div>
+
+            <button class="btn btn-primary" id="imgAiSendBtn" disabled style="width:100%;">Отправить в AI</button>
+
+            <div style="margin-top:8px;"><strong>История</strong></div>
+            <div id="imgAiHistory"
+                 style="overflow:auto; border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:10px; min-height:120px; max-height:30vh;">
+              <div class="muted">История пуста</div>
+            </div>
+          </div>
         </div>
-      </div>
+
+
     </div>
 
     <div class="modal-footer">
@@ -56,4 +66,6 @@
     </div>
   </div>
 </div>
+
+
 

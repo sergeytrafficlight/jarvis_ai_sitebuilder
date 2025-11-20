@@ -89,6 +89,12 @@ a:hover {
     font-size: 14px;
 }
 
+.user-balance {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+
 /* =============================
    🦶 Footer
 ============================= */
@@ -573,4 +579,11 @@ a:hover {
     max-height: 28vh; /* было 40vh */
   }
 }
+
+/* История в пределах модалки */
+#modal_edit_image #imgAiHistory {
+  max-height: 30vh; /* вместо фиксированных 320px */
+}
+
+
 

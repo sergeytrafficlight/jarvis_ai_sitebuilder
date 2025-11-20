@@ -63,7 +63,7 @@ class Transaction(models.Model):
 
     def __str__(self):
 
-        return f"{self.user.email} {self.amount} {self.created_at:%Y-%m-%d}"
+        return f"{self.user.email} {self.created_at:%Y-%m-%d}"
 
 
 class MyTask(models.Model):
@@ -84,11 +84,14 @@ class MyTask(models.Model):
     TYPE_GENERATE_NAME = 'generate_name'
     TYPE_GENERATE_SITE = 'generate_site'
     TYPE_GENERATE_IMAGE = 'generate_image'
+    TYPE_EDIT_IMAGE = 'edit_image'
 
     TYPE_CHOICES = (
         (TYPE_GENERATE_NAME, _("Генерация имени")),
         (TYPE_GENERATE_SITE, _("Генерация сайта")),
         (TYPE_GENERATE_IMAGE, _("Генерация изображения")),
+        (TYPE_EDIT_IMAGE, _("Редактирование изображения")),
+
     )
 
     sub_site = models.ForeignKey('SubSiteProject', on_delete=models.PROTECT, related_name="task")
@@ -110,7 +113,7 @@ class MyTask(models.Model):
         ordering = ['-created_at']
 
     def __str__(self):
-        return f"{self.name} ({self.id}) - {self.status}"
+        return f"{self.name} ({self.id}) - {self.type} {self.status}"
 
 class SiteProject(models.Model):
 
@@ -126,6 +129,12 @@ class SiteProject(models.Model):
     def get_balance(self):
         from core.funds_balance import balance
         return balance(site=self)
+
+    def get_status(self):
+        for t in MyTask.objects.filter(sub_site__site=self).all():
+            if t.status in [MyTask.STATUS_AWAITING, MyTask.STATUS_PROCESSING]:
+                return MyTask.STATUS_PROCESSING
+        return MyTask.STATUS_DONE
 
     class Meta:
         ordering = ["-created_at"]
@@ -146,16 +155,9 @@ class SubSiteProject(models.Model):
     error = models.TextField(null=True, blank=True)
 
     def get_status(self):
-
-        awaiting_processing = False
-        for t in self.task.all():
-            if t.status == MyTask.STATUS_ERROR:
-                return t.status
+        for t in MyTask.objects.filter(sub_site=self).all():
             if t.status in [MyTask.STATUS_AWAITING, MyTask.STATUS_PROCESSING]:
-                awaiting_processing = True
-
-        if awaiting_processing:
-            return MyTask.STATUS_PROCESSING
+                return MyTask.STATUS_PROCESSING
         return MyTask.STATUS_DONE
 
     def get_balance(self):
@@ -183,6 +185,7 @@ class SystemPrompts(models.Model):
     SP_NAME_BASE_JSON = "basic_json"
     SP_NAME_GENERATE_FOR_SITE_IMAGE = "generate_image_for_site"
     SP_NAME_I_HAVE_PAGE_SCREENSHOT = "i_have_page_screenshot"
+    SP_NAME_SITE_EDIT_MAKE_PLAN = "site_edit_make_plan"
 
     SP_CHOICES = (
         (SP_NAME_BASE, _("Базовый промт")),
@@ -190,6 +193,7 @@ class SystemPrompts(models.Model):
         (SP_NAME_BASE_JSON, _("JSON коммуникация")),
         (SP_NAME_GENERATE_FOR_SITE_IMAGE, _("Генерация картинки для сайта")),
         (SP_NAME_I_HAVE_PAGE_SCREENSHOT, _("У меня есть скриншот картинки")),
+        (SP_NAME_SITE_EDIT_MAKE_PLAN, _("Создание плана редактирования сайта")),
     )
 
     type = models.CharField(choices=SP_CHOICES, max_length=64)
@@ -214,8 +218,18 @@ class AICommunicationLog(models.Model):
 
 class AIModelsSettings(models.Model):
 
+
+    FORMAT_TXT = 'text'
+    FORMAT_IMAGE = 'image'
+
+    FORMAT_CHOICES = (
+        (FORMAT_TXT, FORMAT_TXT),
+        (FORMAT_IMAGE, FORMAT_IMAGE),
+    )
+
     type = models.CharField(max_length=20, choices=TYPE_CHOICES)
     model = models.CharField(max_length=20, choices=MODEL_CHOICES)
+    format = models.CharField(max_length=20, choices=FORMAT_CHOICES)
 
     prompt_tokens_price_1m = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     completion_tokens_price_1m = models.DecimalField(max_digits=14, decimal_places=2, default=0)
@@ -238,8 +252,17 @@ class ImageAIEdit(models.Model):
 
 class ImageAIEditConversation(models.Model):
 
-    image_ai_edit = models.ForeignKey(ImageAIEdit, on_delete=models.CASCADE, related_name="image_ai")
+    image_ai_edit = models.ForeignKey(ImageAIEdit, on_delete=models.CASCADE, related_name="image_ai", blank=True, null=True, default=None)
     prompt = models.TextField()
+    comment = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     answer_id = models.CharField(max_length=256)
+
+    task = models.ForeignKey(MyTask, on_delete=models.CASCADE, related_name="image_ai")
+
+    def get_status(self):
+        if self.task_id is None:
+            return MyTask.STATUS_AWAITING
+        else:
+            return self.task.status

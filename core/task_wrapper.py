@@ -1,6 +1,6 @@
 from logging import Logger
 
-from core.models import SubSiteProject, MyTask
+from core.models import SubSiteProject, MyTask, ImageAIEditConversation
 from core.log import *
 logger.setLevel(logging.DEBUG)
 
@@ -28,4 +28,13 @@ def task_generate_image(sub_site: SubSiteProject, path: str, prompt: str):
         type=MyTask.TYPE_GENERATE_IMAGE,
         data_payload=payload,
     )
+
+def task_edit_image(sub_site: SubSiteProject, ai_edit_conversation: ImageAIEditConversation):
+    task = MyTask.objects.create(
+        sub_site=sub_site,
+        type=MyTask.TYPE_EDIT_IMAGE,
+    )
+    ai_edit_conversation.task = task
+    ai_edit_conversation.save(update_fields=['task'])
+    return task
 

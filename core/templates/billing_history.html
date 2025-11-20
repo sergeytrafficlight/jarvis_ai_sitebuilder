@@ -19,7 +19,7 @@
             <tr>
                 <td>{{ op.created_at|date:"d.m.Y H:i" }}</td>
                 <td>{{ op.get_type_display }}</td>
-                <td>{% if op.type == 'charge' %}-{% else %}+{% endif %}{{ op.amount }}</td>
+                <td>{% if op.type == 'charge' %}-{% else %}+{% endif %}{{ op.amount_client }}</td>
                 <td>{{ op.description }}</td>
             </tr>
             {% endfor %}

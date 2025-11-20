@@ -30,10 +30,16 @@ import requests
 from pathlib import Path
 from core.tools import get_subsite_dir
 from core.funds_balance import balance
+from django.utils import timezone
+from .models import ImageAIEdit, ImageAIEditConversation, SubSiteProject
+import os, io, zipfile
+from django.utils.text import slugify
 
 
 
-from core.task_wrapper import task_generate_site_name_classification, task_generate_site
+
+
+from core.task_wrapper import task_generate_site_name_classification, task_generate_site, task_edit_image
 
 from core.log import *
 logger.setLevel(logging.DEBUG)
@@ -65,9 +71,8 @@ def dashboard(request):
 @require_POST
 def site_archive(request, site_id: int):
     site = get_object_or_404(SiteProject, id=site_id, user=request.user)
-    if site.status != SiteProject.STATUS_ARCHIVED:
-        site.status = SiteProject.STATUS_ARCHIVED
-        site.save(update_fields=["status"])
+    site.is_archived = True
+    site.save(update_fields=['is_archived'])
     return JsonResponse({"status": True, "id": site_id})
 
 @login_required
@@ -88,11 +93,13 @@ def sites_bulk_archive(request):
         return JsonResponse({"status": False, "error": "ids must be list of integers"}, status=400)
 
     # Обновляем только ваши сайты и только неархивные
-    updated = SiteProject.objects.filter(
-        user=request.user, id__in=ids
-    ).exclude(status=SiteProject.STATUS_ARCHIVED).update(status=SiteProject.STATUS_ARCHIVED)
+    updated = SiteProject.objects.filter(user=request.user, id__in=ids)
 
-    return JsonResponse({"status": True, "updated": updated, "ids": ids})
+    for u in updated:
+        u.is_archived = True
+        u.save(update_fields=['is_archived'])
+
+    return JsonResponse({"status": True})
 
 
 
@@ -283,7 +290,7 @@ def create_site_task(request):
 
 @login_required
 def site_detail(request, site_id: int):
-    site = get_object_or_404(SiteProject, id=site_id, user=request.user)
+    site = get_object_or_404(SiteProject, id=site_id, user=request.user, is_archived=False)
 
     # Все сабсайты по проекту
     subs = list(SubSiteProject.objects.filter(site=site).order_by("id"))
@@ -489,3 +496,135 @@ def subsite_replace_image_by_url(request, sub_id: int):
         },
     )
     return JsonResponse({"status": True, "file_url": file_url})
+
+@login_required
+def image_ai_conversations(request, sub_id: int):
+    sub = get_object_or_404(SubSiteProject, id=sub_id, site__user=request.user)
+    rel_path = (request.GET.get("rel_path") or "").strip()
+    if not rel_path:
+        return JsonResponse({"status": False, "error": "Missing rel_path"}, status=400)
+
+    image, _ = ImageAIEdit.objects.get_or_create(sub_site=sub, file_path=rel_path)
+    qs = ImageAIEditConversation.objects.filter(image_ai_edit=image).order_by("-created_at")
+
+    items = []
+    has_active = False
+    for conv in qs:
+        if conv.get_status() in [MyTask.STATUS_AWAITING, MyTask.STATUS_PROCESSING]:
+            has_active = True
+        items.append({
+            "id": conv.id,
+            "created_at": timezone.localtime(conv.created_at).isoformat(),
+            "prompt": conv.prompt,
+            "comment": conv.comment or "",
+            "status": conv.get_status(),
+        })
+
+    return JsonResponse({
+        "status": True,
+        "image_id": image.id,
+        "has_active": has_active,
+        "items": items,  # уже в порядке: новые сверху
+    })
+
+@login_required
+@require_POST
+def image_ai_create(request, sub_id: int):
+    sub = get_object_or_404(SubSiteProject, id=sub_id, site__user=request.user)
+    try:
+        data = json.loads(request.body or "{}")
+    except Exception:
+        return JsonResponse({"status": False, "error": "Invalid JSON"}, status=400)
+
+    has_active_tasks = MyTask.objects.filter(
+        sub_site=sub,
+        status__in=[MyTask.STATUS_AWAITING, MyTask.STATUS_PROCESSING]
+    ).exists()
+    if has_active_tasks:
+        return JsonResponse({"status": False, "error": "Ожидайте завершения других задач"}, status=400)
+
+
+    rel_path = (data.get("rel_path") or "").strip()
+    prompt = (data.get("prompt") or "").strip()
+
+    if not rel_path or not prompt:
+        return JsonResponse({"status": False, "error": "Missing rel_path or prompt"}, status=400)
+
+
+    image, _ = ImageAIEdit.objects.get_or_create(sub_site=sub, file_path=rel_path)
+
+    has_active = ImageAIEditConversation.objects.filter(
+        image_ai_edit=image,
+    )
+    for i in has_active:
+        if i.get_status() in [MyTask.STATUS_AWAITING, MyTask.STATUS_PROCESSING]:
+            return JsonResponse({"status": False, "error": "Есть незавершённые коммуникации"}, status=400)
+
+    conv = ImageAIEditConversation.objects.create(
+        image_ai_edit=image,
+        prompt=prompt,
+    )
+
+    task_edit_image(sub, conv)
+
+    run_tasks.apply_async(args=[sub.id])
+
+    return JsonResponse({
+        "status": True,
+        "item": {
+            "id": conv.id,
+            "created_at": timezone.localtime(conv.created_at).isoformat(),
+            "prompt": conv.prompt,
+            "comment": conv.comment or "",
+            "status": conv.get_status(),
+        }
+    }, status=201)
+
+
+@login_required
+def site_tasks_status(request, site_id: int):
+  site = get_object_or_404(SiteProject, id=site_id, user=request.user)
+
+  qs = MyTask.objects.filter(sub_site__site=site)
+  by_status = {row["status"]: row["c"] for row in qs.values("status").annotate(c=Count("id"))}
+  active_qs = qs.filter(status__in=[MyTask.STATUS_AWAITING, MyTask.STATUS_PROCESSING])
+
+  return JsonResponse({
+      "status": True,
+      "total": qs.count(),
+      "active": active_qs.count(),
+      "by_status": by_status,
+      'name': site.name,
+  })
+
+
+@login_required
+def subsite_download(request, sub_id: int):
+    sub = get_object_or_404(SubSiteProject, id=sub_id, site__user=request.user)
+
+    base_dir = Path(get_subsite_dir(sub)).resolve()
+    if not base_dir.exists():
+        raise Http404("Subsite directory not found")
+
+    safe_site_name = slugify(sub.site.name) or f"site-{sub.site.id}"
+    dt = timezone.localtime(sub.created_at).strftime("%Y-%m-%d_%H-%M")
+    zip_name = f"{safe_site_name}_{dt}.zip"
+
+    mem = io.BytesIO()
+    with zipfile.ZipFile(mem, "w", zipfile.ZIP_DEFLATED) as zf:
+        for root, _, files in os.walk(base_dir):
+            for fname in files:
+                full = os.path.join(root, fname)
+                arcname = os.path.relpath(full, start=base_dir)
+                zf.write(full, arcname)
+    mem.seek(0)
+    return FileResponse(mem, as_attachment=True, filename=zip_name, content_type="application/zip")
+
+
+@login_required
+def site_download_latest(request, site_id: int):
+    site = get_object_or_404(SiteProject, id=site_id, user=request.user)
+    sub = SubSiteProject.objects.filter(site=site).order_by("-created_at").first()
+    if not sub:
+        raise Http404("No subsites for this site")
+    return subsite_download(request, sub.id)

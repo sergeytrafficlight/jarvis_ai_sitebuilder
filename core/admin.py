@@ -37,7 +37,7 @@ class SystemPromptsAdmin(admin.ModelAdmin):
 class AICommunicationLogAdmin(admin.ModelAdmin):
   list_display = (
       "created_at", "updated_at", "task", "ai_model", "price_for_ai", "price_for_client",
-      "prompt", "answer",
+      "prompt_tokens", "completion_tokens",
   )
   search_fields = ("prompt", "answer")
   list_filter = ()
@@ -52,4 +52,4 @@ class AIModelsSettingsAdmin(admin.ModelAdmin):
   class MyTaskAdmin(admin.ModelAdmin):
       list_display = ("created_at", "updated_at", "sub_site", "name", "type", "status", "message", "data_payload")
       search_fields = []
-      list_filter = []
+      list_filter = ['status']

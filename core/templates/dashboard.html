@@ -33,6 +33,7 @@
                     <th></th>
                     <th>{% trans "Название" %}</th>
                     <th>{% trans "Создан" %}</th>
+                    <th>{% trans "Статус" %}</th>
                     <th>{% trans "Расход" %}</th>
                     <th>{% trans "Действия" %}</th>
                 </tr>
@@ -46,16 +47,22 @@
                     </td>
                     <td>{{ s.name }}</td>
                     <td>{{ s.created_at|date:"d.m.Y H:i" }}</td>
+                   <td>
+                       <div class="site-status muted" data-site-id="{{ s.id }}">—</div>
+                   </td>
+
                     <td>{{ s.get_balance|default:0|floatformat:6 }}</td>
                     <td>
+                        <a class="btn btn-secondary" href="{% url 'site_download_latest' s.id %}">Скачать</a>
                         <a class="btn btn-secondary" href="{% url 'site_detail' s.id %}">{% trans "Открыть" %}</a>
                         <button class="btn btn-secondary btn-delete-one" data-id="{{ s.id }}">{% trans "Удалить" %}</button>
                     </td>
+
                 </tr>
                 {% endfor %}
             {% else %}
                 <tr>
-                    <td colspan="5" class="muted">{% trans "Пока нет созданных сайтов. Функционал будет добавлен позже." %}</td>
+                    <td colspan="5" class="muted">{% trans "Пока нет созданных сайтов." %}</td>
                 </tr>
             {% endif %}
             </tbody>
@@ -186,6 +193,55 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     });
+
+
+// ----
+  const statusCells = Array.from(document.querySelectorAll('.site-status'));
+
+  function renderSiteStatus(el, data) {
+      const by = data.by_status || {};
+      const awaiting = by.awaiting || 0;
+      const processing = by.processing || 0;
+      const done = by.done || 0;
+      const error = by.error || 0;
+      const active = data.active || 0;
+
+      let overall = 'Готов';
+      if (active > 0) overall = 'Выполняется';
+      else if (error > 0) overall = 'Есть ошибки';
+
+      el.innerHTML = `${overall}: Активных: ${active}; `
+        // + `ожидает: ${awaiting}, в работе: ${processing}, готово: ${done}, ошибка: ${error}`;
+      el.classList.toggle('muted', false);
+    }
+
+  async function fetchAndRenderOne(el) {
+      const siteId = el.getAttribute('data-site-id');
+      if (!siteId) return;
+      try {
+          const resp = await fetch(`/api/site/${siteId}/tasks_status/`, {
+              headers: { 'X-Requested-With': 'XMLHttpRequest' }
+          });
+          const data = await resp.json();
+          if (data && data.status) {
+              renderSiteStatus(el, data);
+          } else {
+              el.textContent = '—';
+          }
+      } catch (e) {
+          // тихо игнорим ошибки сети
+      }
+  }
+
+  async function pollAllSites() {
+      await Promise.all(statusCells.map(fetchAndRenderOne));
+  }
+
+  // первый вызов сразу и периодический
+  pollAllSites();
+  const statusTimer = setInterval(pollAllSites, 3000);
+  window.addEventListener('beforeunload', () => clearInterval(statusTimer));
+
 });
 </script>
 

@@ -72,7 +72,14 @@
   }
 </style>
 
-<h2 id="site_name">{{ site.name }}</h2>
+<div class="site-title-row" style="display:flex; align-items:center; gap:12px;">
+  <h2 id="site_name" style="margin:0; flex:1 1 auto;">{{ site.name }}</h2>
+  <div id="site_spend" class="muted" style="margin-left:auto; white-space:nowrap;">
+    Расход: {{ site.get_balance|default:0|floatformat:6 }} USD
+  </div>
+</div>
+
+
 
 <!-- Верхняя двухколоночная часть: слева дерево, справа статус + промт -->
 <div class="layout">
@@ -85,9 +92,12 @@
             class="side-item {% if selected_sub and selected_sub.id == sub.id %}active{% endif %}"
             href="{% url 'site_detail' site.id %}?sub={{ sub.id }}"
             style="margin-left: {{ item.indent }}px;"
+            data-sub-id="{{ sub.id }}"
+            id="sub-link-{{ sub.id }}"
           >
-            #{{ sub.dir }} <span class="muted" style="margin-left:6px;">({{ sub.get_status }})</span>
+            #{{ sub.dir }} <span class="muted js-sub-status" id="sub-status-{{ sub.id }}">({{ sub.get_status }})</span>
           </a>
+
         {% endwith %}
       {% endfor %}
     {% else %}
@@ -120,11 +130,15 @@
       <strong>Превью выбранной версии</strong>
       <div style="margin-left:auto; display:flex; gap:8px;">
         <button class="btn btn-secondary" id="editToggleBtn">Включить режим редактирования</button>
+        {% if selected_sub %}
+          <a class="btn btn-secondary" href="{% url 'subsite_download' selected_sub.id %}">Скачать</a>
+        {% endif %}
         {% if iframe_src %}
           <a class="btn btn-primary" id="openSiteBtn" href="{{ iframe_src }}" target="_blank" rel="noopener">Открыть</a>
         {% endif %}
       </div>
     </div>
+
 
     <div class="iframe-wrap" style="margin-top:10px;">
       {% if iframe_src %}
@@ -242,10 +256,14 @@
     el.removeAttribute('hidden');
     el.classList.add('active');
   }
-  function closeModal(el) {
-    el.classList.remove('active');
-    el.setAttribute('hidden', '');
-  }
+    function closeModal(el) {
+      el.classList.remove('active');
+      el.setAttribute('hidden', '');
+      if (el && el.id === 'modal_edit_image') {
+        stopImgAiPolling();
+      }
+    }
+
   document.body.addEventListener('click', (e) => {
     const closeSel = e.target?.getAttribute('data-close');
     if (closeSel) {
@@ -390,6 +408,10 @@
 
         currentImageRelPath = relPath; // сохраняем для операций
         imgMeta.textContent = `Изображение: ${relPath || src}`;
+
+        if (imgAiNextPrompt) imgAiNextPrompt.value = '';
+        if (imgAiSendBtn) imgAiSendBtn.disabled = true;
+        startImgAiPolling();
 
         imgPreview.onload = () => {
           try {
@@ -601,7 +623,184 @@ if (imgUrlBtn) {
     });
   }
 
+
+//---------------
+
+    const imgAiNextPrompt = document.getElementById('imgAiNextPrompt');
+    const imgAiSendBtn = document.getElementById('imgAiSendBtn');
+    const imgAiHistory = document.getElementById('imgAiHistory');
+    let imgAiPollTimer = null;
+
+    function stopImgAiPolling() {
+      if (imgAiPollTimer) {
+        clearInterval(imgAiPollTimer);
+        imgAiPollTimer = null;
+      }
+    }
+
+    function renderImgAiHistory(items) {
+      if (!imgAiHistory) return;
+      if (!items || !items.length) {
+        imgAiHistory.innerHTML = '<div class="muted">История пуста</div>';
+        return;
+      }
+      const html = items.map(it => {
+        const dt = new Date(it.created_at);
+        const d = isNaN(dt.getTime()) ? it.created_at : dt.toLocaleString();
+        const c = it.comment ? `<div class="muted" style="margin-top:4px;">Комментарий: ${escapeHtml(it.comment)}</div>` : '';
+        return `
+          <div style="padding:8px; border-bottom:1px solid rgba(255,255,255,0.06);">
+            <div style="font-size:12px; color:#94a3b8;">${d}</div>
+            <div style="margin-top:4px;">${escapeHtml(it.prompt)}</div>
+            ${c}
+            <div style="margin-top:6px; font-size:12px; color:#cbd5e1;">Статус: ${escapeHtml(it.status)}</div>
+          </div>
+        `;
+      }).join('');
+      imgAiHistory.innerHTML = html;
+    }
+
+    // простая экранировка
+    function escapeHtml(s) {
+      return String(s || '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;');
+    }
+
+    async function fetchImgAiHistory() {
+      if (!subId || !currentImageRelPath) return;
+      try {
+        const convResp = await fetch(`/api/subsite/${subId}/image_ai/conversations/?rel_path=${encodeURIComponent(currentImageRelPath)}`, {
+          headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        });
+        const tasksResp = await fetchTasksStatus();
+
+        const convData = await convResp.json();
+        if (!convData.status) throw new Error(convData.error || 'Ошибка');
+
+        renderImgAiHistory(convData.items || []);
+
+        const tasksActive = (tasksResp && tasksResp.active) ? tasksResp.active > 0 : false;
+
+        // Блокируем поле и кнопку, если есть активные MyTask
+        if (imgAiNextPrompt) {
+          imgAiNextPrompt.disabled = tasksActive;
+          imgAiNextPrompt.placeholder = tasksActive
+            ? 'Ожидайте завершения других задач'
+            : 'Опишите следующий запрос к ИИ...';
+        }
+
+        // Кнопка доступна только если нет активных MyTask и нет активных AI-конверсий
+        const canSend = !tasksActive && !convData.has_active && !!(imgAiNextPrompt?.value || '').trim();
+        if (imgAiSendBtn) imgAiSendBtn.disabled = !canSend;
+
+      } catch(e) {
+        // опционально — показать muted статус
+      }
+    }
+
+
+    function startImgAiPolling() {
+      stopImgAiPolling();
+      fetchImgAiHistory();
+      imgAiPollTimer = setInterval(fetchImgAiHistory, 3000);
+    }
+
+    // обновляем доступность кнопки при вводе
+    if (imgAiNextPrompt) {
+      imgAiNextPrompt.addEventListener('input', () => {
+        // доступность кнопки пересчитается при следующем fetch; но можно и локально
+        // включим, только если что-то введено; окончательно подтвердит fetchImgAiHistory
+        const hasText = !!(imgAiNextPrompt.value || '').trim();
+        if (imgAiSendBtn) imgAiSendBtn.disabled = !hasText;
+      });
+    }
+
+    // отправка запроса в AI
+    if (imgAiSendBtn) {
+      imgAiSendBtn.addEventListener('click', async () => {
+        if (!subId || !currentImageRelPath) return;
+        const prompt = (imgAiNextPrompt?.value || '').trim();
+        if (!prompt) return;
+
+        imgAiSendBtn.disabled = true;
+        try {
+          const resp = await fetch(`/api/subsite/${subId}/image_ai/create/`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CSRFToken': getCookie('csrftoken'),
+            },
+            body: JSON.stringify({
+              rel_path: currentImageRelPath,
+              prompt: prompt,
+              // comment: '', // если захотите позже добавить поле комментария при отправке
+            }),
+          });
+          const data = await resp.json();
+          if (!data.status) {
+            alert(data.error || 'Не удалось отправить запрос');
+            return;
+          }
+          // очистим поле, история обновится поллером
+          if (imgAiNextPrompt) imgAiNextPrompt.value = '';
+          // мгновенно обновим
+          fetchImgAiHistory();
+        } catch(e) {
+          alert('Ошибка сети');
+        }
+      });
+    }
+
+//--------
+    async function fetchTasksStatus() {
+      if (!subId) return {status: true, active: 0, total: 0};
+      const resp = await fetch(`/api/subsite/${subId}/tasks_status/`, {
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+      });
+      return resp.json();
+    }
+
+
 })();
 </script>
+
+<script>
+(function() {
+  const subLinks = Array.from(document.querySelectorAll('.side-item[data-sub-id]'));
+  async function pollSubStatuses() {
+    await Promise.all(subLinks.map(async (link) => {
+      const id = link.dataset.subId;
+      try {
+        const resp = await fetch(`/api/subsite/${id}/tasks_status/`, {
+          headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        });
+        const data = await resp.json();
+        if (!data.status) return;
+
+        const span = document.getElementById(`sub-status-${id}`);
+        if (!span) return;
+
+        const by = data.by_status || {};
+        const active = data.active || 0;
+        const hasError = by.error || 0;
+
+        // То же поведение, что и get_status: если есть AWAITING/PROCESSING — processing, иначе done (или error при желании)
+        let text = active > 0 ? 'processing' : 'done';
+        if (active === 0 && hasError > 0) text = 'error';
+
+        span.textContent = `(${text})`;
+      } catch (e) {
+        // тихо игнорируем
+      }
+    }));
+  }
+  pollSubStatuses();
+  const timer = setInterval(pollSubStatuses, 3000);
+  window.addEventListener('beforeunload', () => clearInterval(timer));
+})();
+</script>
+
 
 {% endblock %}
