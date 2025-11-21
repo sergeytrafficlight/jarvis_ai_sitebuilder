@@ -6,7 +6,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>{% block title %}AI Site Builder{% endblock %}</title>
+    <title>{% block title %}Black&White{% endblock %}</title>
     <link rel="stylesheet" href="/static/css/styles.css" />
 </head>
 <body>
@@ -15,7 +15,7 @@
 
     <header class="site-header">
         <div class="container header-inner">
-            <div class="brand"><a href="/">AI Site Builder</a></div>
+            <div class="brand"><a href="/">Black&White</a></div>
             {% if request.user.is_authenticated %}
             <nav class="nav">
                 <a href="/dashboard/">{% trans "Дашборд" %}</a>
@@ -60,7 +60,7 @@
     </main>
 
     <footer class="site-footer">
-        <div class="container">© {% now "Y" %} AI Site Builder</div>
+        <div class="container">© {% now "Y" %} Black&White AI Landing</div>
     </footer>
 </body>
 </html>

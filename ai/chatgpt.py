@@ -1,4 +1,4 @@
-
+from datetime import datetime
 import requests
 import httpx
 import base64
@@ -281,3 +281,47 @@ def get_edit_image_conversation(prompt: str, input_image_path:str, last_answer_i
     )
 
     return answer
+
+
+
+
+def get_expenses(start_date, end_date=None):
+    # Используем контекстный менеджер для автоматического закрытия соединения
+    if start_date:
+        dt = datetime.strptime(start_date, '%Y-%m-%d')
+        start_date = int(dt.timestamp())
+
+    if end_date:
+        dt = datetime.strptime(end_date, '%Y-%m-%d')
+        end_date = int(dt.timestamp())
+
+    with httpx.Client(proxy=AI_PROXY if len(AI_PROXY) else None, timeout=httpx.Timeout(HTTP_TIMEOUT)) as http_client:
+
+        url = "https://api.openai.com/v1/organization/costs"
+
+        headers = {
+            "Authorization": f"Bearer {CHATGPT_API_KEY}"
+        }
+
+        # Строим параметры запроса, используя "date" вместо "date_from"
+        params = {
+            "start_time": start_date,
+        }
+        if end_date:
+            params["end_time"] = end_date  # если есть end_date, добавляем его
+
+        # Выполняем запрос
+        try:
+            response = http_client.get(url, headers=headers, params=params)
+            response.raise_for_status()  # Поднимет исключение для ошибок HTTP (например 4xx, 5xx)
+        except httpx.HTTPStatusError as http_err:
+            raise Exception(f"API Error: {http_err.response.status_code} - {http_err.response.text}")
+        except Exception as err:
+            raise Exception(f"Request failed: {err}")
+
+        # Обрабатываем данные ответа
+        costs_data = response.json()
+        print(f"costs: {costs_data}")
+
+        return 0
+

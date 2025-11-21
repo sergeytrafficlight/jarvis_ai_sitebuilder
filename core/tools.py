@@ -1,6 +1,7 @@
 import uuid
 import os
 import shutil
+from playwright.sync_api import sync_playwright
 from bs4 import BeautifulSoup
 from urllib.parse import urlparse
 from django.contrib.auth.models import User
@@ -262,3 +263,31 @@ def get_visible_text(html_text):
 
     return text
 
+
+def get_html_with_playwright_advanced(url, wait_for_selector=None, timeout=30000):
+    with sync_playwright() as p:
+        browser = p.chromium.launch(
+            headless=True,
+            args=['--no-sandbox', '--disable-dev-shm-usage']
+        )
+        context = browser.new_context(
+            viewport={'width': 1920, 'height': 1080},
+            user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        )
+
+        page = context.new_page()
+        page.goto(url, wait_until='domcontentloaded')
+
+        # Ждем либо конкретный элемент, либо полную загрузку
+        if wait_for_selector:
+            page.wait_for_selector(wait_for_selector, timeout=timeout)
+        else:
+            page.wait_for_load_state('networkidle')
+
+        # Можно выполнить дополнительный JS если нужно
+        page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+
+        html_content = page.content()
+        browser.close()
+
+        return html_content

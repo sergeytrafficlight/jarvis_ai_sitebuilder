@@ -5,7 +5,7 @@ import threading
 from bs4 import BeautifulSoup
 from celery import shared_task, Task
 from ai.ai import ai_log, ai_log_update
-from core.models import SiteProject, MyTask, SystemPrompts, SubSiteProject, ImageAIEditConversation, ImageAIEdit
+from core.models import SiteProject, MyTask, SystemPrompts, SubSiteProject, ImageAIEditConversation, ImageAIEdit, get_profile
 from ai.ai import get_text_img2text_answer, get_text2img_answer, get_edit_image_conversation
 from core.tools import get_subsite_dir, extract_json_from_text
 from core.tools import ProcessFileResult
@@ -15,7 +15,7 @@ from config import THREADS_PARALLEL_MAX_COUNT, SITE_URL
 from core.screenshot import generate_screenshort
 from core.site_analyzer import SiteAnalyzer
 from core.funds_balance import charge
-from core.tools import get_visible_text
+from core.tools import get_visible_text, get_html_with_playwright_advanced
 
 from core.log import *
 logger.setLevel(logging.DEBUG)
@@ -110,9 +110,8 @@ def run_task_generate_site(task: MyTask):
         if screenshot_path.startswith("/"):
             screenshot_path = screenshot_path[1:]
 
-        response = requests.get(site.ref_site_url)
-        response.raise_for_status()
-        html_text = get_visible_text(response.text)
+        response = get_html_with_playwright_advanced(site.ref_site_url)
+        html_text = get_visible_text(response)
 
 
     payload = task.data_payload
@@ -318,9 +317,12 @@ def run_task_edit_site(task: MyTask):
     site_analyze_result = site_analyzer.analyze()
 
     prompt += "\nСтруктура сайта (BEGIN)\n"
-    for file, info in site_analyze_result.items():
-        prompt += str(info['relative']) + "\n"
-        prompt += str(info) + "\n"
+    if len(site_analyze_result.items()) == 0:
+        prompt += "\nВ струкутре файла сейчас отсутствуют файлы!\n"
+    else:
+        for file, info in site_analyze_result.items():
+            prompt += str(info['relative']) + "\n"
+            prompt += str(info) + "\n"
     prompt += "Структура сайта (END)\n"
 
     prompt += "\nЗапрос пользователя:\n"
@@ -387,6 +389,9 @@ def run_tasks_ex_thread(tasks):
         t.save()
 
         try:
+            if get_profile(t.sub_site.site.user).get_balance() < 0.0:
+                raise Exception(f"Недостаточный баланс ({get_profile(t.sub_site.site.user).get_balance()})")
+
             if t.type == MyTask.TYPE_GENERATE_IMAGE:
                 run_task_geneate_image(t)
             elif t.type == MyTask.TYPE_EDIT_IMAGE:
@@ -394,6 +399,7 @@ def run_tasks_ex_thread(tasks):
             else:
                 logger.error("Exception occurred:\n%s", traceback.format_exc())
                 raise Exception(f"Unknown task type {t.type}")
+
         except Exception as e:
             logger.error("Exception occurred:\n%s", traceback.format_exc())
             t.status = MyTask.STATUS_ERROR
@@ -451,6 +457,8 @@ def run_tasks_ex_cycle(sub_site_id: int):
             t.save()
 
             try:
+                if get_profile(t.sub_site.site.user).get_balance() < 0.0:
+                    raise Exception(f"Недостаточный баланс ({get_profile(t.sub_site.site.user).get_balance()})")
                 if t.type == MyTask.TYPE_GENERATE_NAME:
                     run_task_generate_name(t)
                 elif t.type == MyTask.TYPE_GENERATE_SITE:

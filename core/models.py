@@ -42,6 +42,9 @@ class Profile(models.Model):
     def __str__(self):
         return f"Profile({self.user.username})"
 
+def get_profile(user: User):
+    return Profile.objects.get(user=user)
+
 
 class Transaction(models.Model):
     TYPE_TOPUP = "topup"
