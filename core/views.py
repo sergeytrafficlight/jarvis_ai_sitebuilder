@@ -39,7 +39,7 @@ from django.utils.text import slugify
 
 
 
-from core.task_wrapper import task_generate_site_name_classification, task_generate_site, task_edit_image
+from core.task_wrapper import task_generate_site_name_classification, task_generate_site, task_edit_image, task_edit_site
 
 from core.log import *
 logger.setLevel(logging.DEBUG)
@@ -632,25 +632,89 @@ def site_download_latest(request, site_id: int):
 @login_required
 @require_POST
 def site_correction_submit(request, site_id: int):
-    # Пытаемся распарсить как JSON
+    # Проверяем, что сайт принадлежит пользователю
+    site = get_object_or_404(SiteProject, id=site_id, user=request.user)
+
+    # Поддерживаем JSON и form-data
     prompt = ""
+    sub_id = None
+
     if request.content_type and "application/json" in request.content_type:
         try:
             payload = json.loads(request.body.decode("utf-8"))
-            prompt = (payload.get("prompt") or "").strip()
         except Exception:
-            prompt = ""
+            payload = {}
+        prompt = (payload.get("prompt") or "").strip()
+        sub_id = payload.get("sub_id")
     else:
         prompt = (request.POST.get("prompt") or "").strip()
+        sub_id = request.POST.get("sub_id")
 
     if not prompt:
         return JsonResponse({"ok": False, "error": "Текст запроса пустой"}, status=400)
 
-    # TODO: твоя логика обработки запроса пользователя по site_id и prompt
-    # Пример заглушки успешного ответа:
+    # Если передали sub_id — можно (опционально) убедиться, что он принадлежит этому сайту
+    # и текущему пользователю. Логику ниже можете расширить под свою задачу.
+    if sub_id:
+        try:
+            sub_id_int = int(sub_id)
+        except Exception:
+            return JsonResponse({"ok": False, "error": "Некорректный sub_id"}, status=400)
+
+        from .models import SubSiteProject
+        sub = SubSiteProject.objects.filter(id=sub_id_int, site=site).first()
+        if not sub:
+            return JsonResponse({"ok": False, "error": "Subsite не найден"}, status=404)
+
+
+    if sub.has_active_tasks():
+        return JsonResponse({"ok": False, "error": "Subsite имеет активные задачи"}, status=404)
+
+    task_edit_site(sub, prompt)
+    run_tasks.apply_async(args=[sub.id])
+
     return JsonResponse({
         "ok": True,
         "message": "Запрос принят",
         "site_id": site_id,
-        # "result": ...
+        "sub_id": sub_id
     })
+
+
+@login_required
+def subsite_tasks_list(request, sub_id: int):
+    sub = get_object_or_404(SubSiteProject, id=sub_id, site__user=request.user)
+    qs = MyTask.objects.filter(
+        sub_site=sub,
+        status__in=[MyTask.STATUS_AWAITING, MyTask.STATUS_PROCESSING, MyTask.STATUS_ERROR]
+    ).order_by("-created_at")
+    items = []
+    for t in qs:
+        items.append({
+            "id": t.id,
+            "name": t.name or "",
+            "type": t.type,
+            "type_label": t.get_type_display(),
+            "status": t.status,
+            "status_label": t.get_status_display(),
+            "message": t.message or "",
+            "created_at": timezone.localtime(t.created_at).isoformat(),
+            "updated_at": timezone.localtime(t.updated_at).isoformat(),
+        })
+    return JsonResponse({"status": True, "items": items})
+
+@login_required
+@require_POST
+def task_restart_stub(request, task_id: int):
+    # Проверка доступа
+    _ = get_object_or_404(MyTask, id=task_id, sub_site__site__user=request.user)
+    # Заглушка: здесь позже будет логика рестарта
+    return JsonResponse({"status": True, "message": "Restart stub OK"})
+
+@login_required
+@require_POST
+def task_delete_stub(request, task_id: int):
+    # Проверка доступа
+    _ = get_object_or_404(MyTask, id=task_id, sub_site__site__user=request.user)
+    # Заглушка: здесь позже будет логика удаления
+    return JsonResponse({"status": True, "message": "Delete stub OK"})

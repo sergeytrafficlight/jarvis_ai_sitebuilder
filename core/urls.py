@@ -35,5 +35,8 @@ urlpatterns = [
     path("subsites/<int:sub_id>/download/", views.subsite_download, name="subsite_download"),
     path("sites/<int:site_id>/correction/", views.site_correction_submit, name="site_correction_submit"),
 
+    path("api/subsite/<int:sub_id>/tasks_list/", views.subsite_tasks_list, name="subsite_tasks_list"),
+    path("api/task/<int:task_id>/restart/", views.task_restart_stub, name="task_restart_stub"),
+    path("api/task/<int:task_id>/delete/", views.task_delete_stub, name="task_delete_stub"),
 
 ]

@@ -18,12 +18,14 @@ TYPE_CHOICES = (
 
 MODEL_CHATGPT_5 = 'gpt-5'
 MODEL_CHATGPT_5_1 = 'gpt-5.1'
+MODEL_CHATGPT_4O = 'gpt-4o'
 MODEL_CHATGPT_IMG_1 = 'gpt-image-1'
 MODEL_DEEP_SEEK_CHAT = 'deepseek-chat'
 MODEL_DEEP_SEEK_REASONER = 'deepseek-reasoner'
 MODEL_CHOICES = (
     (MODEL_CHATGPT_5, MODEL_CHATGPT_5),
     (MODEL_CHATGPT_5_1, MODEL_CHATGPT_5_1),
+    (MODEL_CHATGPT_4O, MODEL_CHATGPT_4O),
     (MODEL_CHATGPT_IMG_1, MODEL_CHATGPT_IMG_1),
     (MODEL_DEEP_SEEK_CHAT, MODEL_DEEP_SEEK_CHAT),
     (MODEL_DEEP_SEEK_REASONER, MODEL_DEEP_SEEK_REASONER),
@@ -168,6 +170,9 @@ class SubSiteProject(models.Model):
         from core.funds_balance import balance
         return balance(sub_site=self)
 
+    def has_active_tasks(self):
+        return MyTask.objects.filter(sub_site=self, status__in=[MyTask.STATUS_AWAITING, MyTask.STATUS_PROCESSING]).exists()
+
 
 
 @receiver(post_save, sender=User)
@@ -187,9 +192,11 @@ class SystemPrompts(models.Model):
     SP_NAME_BASE = "basic_prompt"
     SP_NAME_CLASSIFICATION = "name_classification"
     SP_NAME_BASE_JSON = "basic_json"
+    SP_NAME_SITE_COPY = "site_copy"
     SP_NAME_GENERATE_FOR_SITE_IMAGE = "generate_image_for_site"
     SP_NAME_I_HAVE_PAGE_SCREENSHOT = "i_have_page_screenshot"
     SP_NAME_SITE_EDIT_MAKE_PLAN = "site_edit_make_plan"
+
 
     SP_CHOICES = (
         (SP_NAME_BASE, _("Базовый промт")),
@@ -198,6 +205,7 @@ class SystemPrompts(models.Model):
         (SP_NAME_GENERATE_FOR_SITE_IMAGE, _("Генерация картинки для сайта")),
         (SP_NAME_I_HAVE_PAGE_SCREENSHOT, _("У меня есть скриншот картинки")),
         (SP_NAME_SITE_EDIT_MAKE_PLAN, _("Создание плана редактирования сайта")),
+        (SP_NAME_SITE_COPY, _("Копирование сайта")),
     )
 
     type = models.CharField(choices=SP_CHOICES, max_length=64)

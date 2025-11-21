@@ -20,8 +20,8 @@ def ai_log_update(log: AICommunicationLog, answer: ai_answer):
     log.save()
 
 
-def get_text2text_answer(prompt: str, creative_enabled=False, model: str = ''):
-    return chatgpt.get_text2text_answer(prompt, creative_enabled)
+def get_text_img2text_answer(prompt: str, img_path=None, creative_enabled=False, model: str = ''):
+    return chatgpt.get_text_img2text_answer(prompt=prompt, img_path=img_path, creative_enabled=creative_enabled)
 
 def get_text2img_answer(prompt: str, input_image_path: str, creative_enabled=False):
     return chatgpt.get_text2img_answer(prompt, input_image_path, creative_enabled)

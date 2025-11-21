@@ -20,7 +20,7 @@ class Command(BaseCommand):
 
         print(f"Sub: {sub}")
 
-        MyTask.objects.filter(sub_site=sub, status__in=[MyTask.STATUS_ERROR]).update(status=MyTask.STATUS_AWAITING)
+        MyTask.objects.filter(sub_site=sub, status__in=[MyTask.STATUS_ERROR, MyTask.STATUS_PROCESSING]).update(status=MyTask.STATUS_AWAITING)
 
 
 

@@ -5,11 +5,11 @@ import threading
 from celery import shared_task, Task
 from ai.ai import ai_log, ai_log_update
 from core.models import SiteProject, MyTask, SystemPrompts, SubSiteProject, ImageAIEditConversation, ImageAIEdit
-from ai.ai import get_text2text_answer, get_text2img_answer, get_edit_image_conversation
+from ai.ai import get_text_img2text_answer, get_text2img_answer, get_edit_image_conversation
 from core.tools import get_subsite_dir, extract_json_from_text
 from core.tools import ProcessFileResult
 from django.urls import reverse
-from core.task_wrapper import task_generate_image
+from core.task_wrapper import task_generate_image,  task_edit_file, task_edit_image
 from config import THREADS_PARALLEL_MAX_COUNT, SITE_URL
 from core.screenshot import generate_screenshort
 from core.site_analyzer import SiteAnalyzer
@@ -51,7 +51,7 @@ def run_task_generate_name(task: MyTask):
     logger.debug(f'Generate site name')
     log = ai_log(task, prompt)
 
-    answer = get_text2text_answer(prompt, creative_enabled=True)
+    answer = get_text_img2text_answer(prompt, creative_enabled=True)
 
     ai_log_update(log, answer)
 
@@ -89,16 +89,38 @@ def run_task_generate_site_parse_answer(task: MyTask, answer: str):
     return result
 
 def run_task_generate_site(task: MyTask):
+
+    sub = task.sub_site
+    site = sub.site
+
+    logger.debug(f"generate site strucutre")
+
+    logger.debug(f"ref url: {site.ref_site_url}, generate screenshot ")
+
+    screenshot_path = None
+    if site.ref_site_url:
+        r, result = generate_screenshort(task.sub_site.site.user, site.ref_site_url, task.sub_site.site.user)
+        if not result:
+            raise Exception(f"Can't generate screenshot for {site.ref_site_url}")
+        logger.debug(f"screenshot received: {result.image.url}")
+        screenshot_path = result.image.url
+        if screenshot_path.startswith("/"):
+            screenshot_path = screenshot_path[1:]
+
+    payload = task.data_payload
+    user_prompt = payload['prompt']
+
     prompt = SystemPrompts.objects.get(type=SystemPrompts.SP_NAME_BASE).prompt
     prompt += "\n"
     prompt += SystemPrompts.objects.get(type=SystemPrompts.SP_NAME_BASE_JSON).prompt
+    if screenshot_path:
+        prompt += "\n" + SystemPrompts.objects.get(type=SystemPrompts.SP_NAME_SITE_COPY).prompt
     prompt += "\nЗапрос пользователя для генерации html сайта:\n"
-    prompt += task.prompt
+    prompt += user_prompt
 
     log = ai_log(task, prompt)
 
-    logger.debug(f"generate site strucutre")
-    answer = get_text2text_answer(prompt)
+    answer = get_text_img2text_answer(prompt=prompt, img_path=screenshot_path)
     logger.debug(f"done")
 
     logger.debug(f"Dir {dir}")
@@ -120,26 +142,33 @@ def run_task_edit_file(task: MyTask):
     prompt = SystemPrompts.objects.get(type=SystemPrompts.SP_NAME_BASE).prompt
     prompt += "\n"
     prompt += SystemPrompts.objects.get(type=SystemPrompts.SP_NAME_BASE_JSON).prompt
-    prompt += "\nПользователь запросил коррекцию следующего файла\n"
-    prompt += "\nПуть: " + file_path
 
-    with open(full_file_path, 'r') as f:
-        file_body = f.read()
+    if file_path:
+        prompt += "\nПользователь запросил коррекцию следующего файла\n"
+        prompt += "\nПуть: " + file_path
 
-    prompt += f"\nТело файла (BEGIN)\n"
-    prompt += file_body
-    prompt += f"\nТело файла (END)\n"
+        try:
+            with open(full_file_path, 'r') as f:
+                file_body = f.read()
+        except Exception as e:
+            raise Exception(f"Can't open file {full_file_path}")
+
+        prompt += f"\nТело файла (BEGIN)\n"
+        prompt += file_body
+        prompt += f"\nТело файла (END)\n"
 
 
-    prompt += "\nЗапрос пользователя редактирование страницы:\n"
+        prompt += "\nЗапрос пользователя редактирование страницы:\n"
+    else:
+        prompt += "\nПользователь запросил коррекцию сайта"
+        prompt += "\nЗапрос пользователя на коррекцию сайта:\n"
+
     prompt += user_prompt
 
     log = ai_log(task, prompt)
 
     logger.debug(f"edit_file")
-    print(f"PROMPT")
-    print(prompt)
-    answer = get_text2text_answer(prompt)
+    answer = get_text_img2text_answer(prompt)
     logger.debug(f"done")
 
     logger.debug(f"Dir {dir}")
@@ -285,24 +314,33 @@ def run_task_edit_site(task: MyTask):
     prompt += "\nЗапрос пользователя:\n"
     prompt += user_prompt
 
-
-    print(f"Промт")
-    print(prompt)
     log = ai_log(task, prompt)
 
 
-    answer = get_text2text_answer(prompt)
+    answer = get_text_img2text_answer(prompt)
 
     charge(task.sub_site, answer, task.type)
     ai_log_update(log, answer)
 
-    print(f"Answer")
-    print(answer.answer)
+
+    answer_json = extract_json_from_text(answer.answer)
+    answer_json = json.loads(answer_json)
 
 
-
-
-
+    for t in answer_json:
+        prompt = t['prompt'] or ''
+        file_path = t['file_path'] or ''
+        if t['engine'] == 'text2text':
+            task_edit_file(task.sub_site, prompt, file_path)
+        elif t['engine'] == 'text2img':
+            image, _ = ImageAIEdit.objects.get_or_create(sub_site=task.sub_site, file_path=file_path)
+            conv = ImageAIEditConversation.objects.create(
+                image_ai_edit=image,
+                prompt=prompt,
+            )
+            task_edit_image(task.sub_site, conv)
+        else:
+            raise Exception(f"Unknown task engine {task['engine']}")
 
 
 class ParallelTasks:
@@ -384,6 +422,7 @@ def run_tasks_ex_cycle(sub_site_id: int):
                 MyTask.TYPE_GENERATE_SITE,
                 MyTask.TYPE_GENERATE_NAME,
                 MyTask.TYPE_EDIT_FILE,
+                MyTask.TYPE_EDIT_SITE,
             ]:
                 task_queue_serial.append(t)
             elif t.type in [
@@ -406,6 +445,8 @@ def run_tasks_ex_cycle(sub_site_id: int):
                     run_task_generate_site(t)
                 elif t.type == MyTask.TYPE_EDIT_FILE:
                     run_task_edit_file(t)
+                elif t.type == MyTask.TYPE_EDIT_SITE:
+                    run_task_edit_site(t)
                 else:
                     raise Exception(f"Unknown task ({t.id}) type {t.type}")
 

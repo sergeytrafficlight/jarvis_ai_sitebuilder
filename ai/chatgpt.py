@@ -6,7 +6,7 @@ from openai import OpenAI, APITimeoutError
 from config import AI_PROXY, CHATGPT_API_KEY
 from ai.ai_answer import ai_answer
 from core.models import AIModelsSettings
-from core.models import MODEL_CHATGPT_5_1, MODEL_CHATGPT_IMG_1, MODEL_CHATGPT_5
+from core.models import MODEL_CHATGPT_5_1, MODEL_CHATGPT_IMG_1, MODEL_CHATGPT_5, MODEL_CHATGPT_4O
 from core.models import TYPE_CHATGPT
 import math
 from PIL import Image
@@ -18,9 +18,76 @@ logger.setLevel(logging.DEBUG)
 
 HTTP_TIMEOUT = 60.0 * 20
 
+def calculate_gpt5_image_tokens(image_source, fidelity: str = "high") -> int:
+    """
+    Полный и точный расчёт токенов для GPT Image 1 input image.
+    image_source: путь к файлу (str) или bytes (in-memory)
+    fidelity: 'low' | 'high'
+    """
 
-def get_text2text_answer(prompt: str, creative_enabled=False) -> str:
-    model = MODEL_CHATGPT_5_1
+    BASE_TOKENS = 65
+    TILE_TOKENS = 129
+
+    # === Step 1: load image from path OR bytes ===
+    if isinstance(image_source, str):
+        # image_source is path
+        img = Image.open(image_source)
+    else:
+        # image_source is bytes or bytearray or BytesIO-like
+        if isinstance(image_source, (bytes, bytearray)):
+            img = Image.open(BytesIO(image_source))
+        else:
+            # Assume it's already a file-like object
+            img = Image.open(image_source)
+
+    w, h = img.size
+
+    # === Step 2: scale shortest side to 512 ===
+    shortest = min(w, h)
+    scale = 512 / shortest
+
+    w = int(round(w * scale))
+    h = int(round(h * scale))
+
+    # === Step 3: count 512px tiles ===
+    tiles_w = math.ceil(w / 512)
+    tiles_h = math.ceil(h / 512)
+    tiles = tiles_w * tiles_h
+
+    # === Step 4: base price ===
+    tokens = BASE_TOKENS + tiles * TILE_TOKENS
+
+    # === Step 5: high-fidelity modifiers ===
+    if fidelity == "high":
+        # determine shape
+        if abs(w - h) < 5:
+            tokens += 4160
+        else:
+            tokens += 6240
+
+    return tokens
+
+
+def get_text_img2text_answer(prompt: str, img_path:str, creative_enabled=False) -> str:
+
+
+    logger.debug(f"Image path: {img_path}")
+    img_tokens = 0
+
+    if img_path:
+        with open(img_path, "rb") as f:
+            image_bytes = f.read()
+            image_base64 = base64.b64encode(image_bytes).decode("utf-8")
+            mime_type = "image/jpeg" if img_path.lower().endswith(".jpg") or img_path.lower().endswith(
+                ".jpeg") else "image/png"
+            image_data_url = f"data:{mime_type};base64,{image_base64}"
+        img_tokens = calculate_gpt5_image_tokens(img_path)
+        model = MODEL_CHATGPT_4O
+        ai_settings = AIModelsSettings.objects.get(type=TYPE_CHATGPT, model=model, format=AIModelsSettings.FORMAT_IMAGE)
+    else:
+        model = MODEL_CHATGPT_5_1
+        ai_settings = AIModelsSettings.objects.get(type=TYPE_CHATGPT, model=model, format=AIModelsSettings.FORMAT_TXT)
+        image_data_url = None
 
     if creative_enabled:
         temperature = 1.8
@@ -29,7 +96,7 @@ def get_text2text_answer(prompt: str, creative_enabled=False) -> str:
         temperature = 0.0
         top_p = 1
 
-    ai_settings = AIModelsSettings.objects.get(type=TYPE_CHATGPT, model=model, format=AIModelsSettings.FORMAT_TXT)
+
 
     if len(AI_PROXY):
         http_client =  httpx.Client(
@@ -44,13 +111,21 @@ def get_text2text_answer(prompt: str, creative_enabled=False) -> str:
         http_client=http_client
     )
 
+    content = [
+        {"type": "text", "text": prompt}
+    ]
+
+    if image_data_url:
+        content.append({"type": "image_url", "image_url": {"url": image_data_url}})
+    # Формируем сообщение
     messages = [
         {
             "role": "user",
-            "content": [{"type": "text", "text": prompt}],
+             "content": content,
         }
     ]
 
+    logger.debug(f"model {model}")
     response = client.chat.completions.create(
         model=model,
         messages=messages,
@@ -63,7 +138,7 @@ def get_text2text_answer(prompt: str, creative_enabled=False) -> str:
     answer = ai_answer(
         ai_settings=ai_settings,
         answer=answer_txt,
-        prompt_tokens=response.usage.prompt_tokens,
+        prompt_tokens=response.usage.prompt_tokens + img_tokens,
         completion_tokens=response.usage.completion_tokens,
     )
 
@@ -119,56 +194,6 @@ def get_text2img_answer(
     )
 
     return answer
-
-
-def calculate_gpt5_image_tokens(image_source, fidelity: str = "high") -> int:
-    """
-    Полный и точный расчёт токенов для GPT Image 1 input image.
-    image_source: путь к файлу (str) или bytes (in-memory)
-    fidelity: 'low' | 'high'
-    """
-
-    BASE_TOKENS = 65
-    TILE_TOKENS = 129
-
-    # === Step 1: load image from path OR bytes ===
-    if isinstance(image_source, str):
-        # image_source is path
-        img = Image.open(image_source)
-    else:
-        # image_source is bytes or bytearray or BytesIO-like
-        if isinstance(image_source, (bytes, bytearray)):
-            img = Image.open(BytesIO(image_source))
-        else:
-            # Assume it's already a file-like object
-            img = Image.open(image_source)
-
-    w, h = img.size
-
-    # === Step 2: scale shortest side to 512 ===
-    shortest = min(w, h)
-    scale = 512 / shortest
-
-    w = int(round(w * scale))
-    h = int(round(h * scale))
-
-    # === Step 3: count 512px tiles ===
-    tiles_w = math.ceil(w / 512)
-    tiles_h = math.ceil(h / 512)
-    tiles = tiles_w * tiles_h
-
-    # === Step 4: base price ===
-    tokens = BASE_TOKENS + tiles * TILE_TOKENS
-
-    # === Step 5: high-fidelity modifiers ===
-    if fidelity == "high":
-        # determine shape
-        if abs(w - h) < 5:
-            tokens += 4160
-        else:
-            tokens += 6240
-
-    return tokens
 
 
 
