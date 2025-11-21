@@ -16,7 +16,7 @@ from core.log import *
 logger.setLevel(logging.DEBUG)
 
 
-HTTP_TIMEOUT = 60.0 * 20
+HTTP_TIMEOUT = 60.0 * 9
 
 def calculate_gpt5_image_tokens(image_source, fidelity: str = "high") -> int:
     """

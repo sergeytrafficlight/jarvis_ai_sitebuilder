@@ -1,6 +1,7 @@
 import uuid
 import os
 import shutil
+from bs4 import BeautifulSoup
 from urllib.parse import urlparse
 from django.contrib.auth.models import User
 from config import DIR_USER_PREFIX, DIR_IMAGES_PREFIX, DIR_SITES_PREFIX
@@ -241,3 +242,23 @@ class ProcessFileResult:
                 )
 
         return not len(self.errors)
+
+
+
+def get_visible_text(html_text):
+    soup = BeautifulSoup(html_text, 'html.parser')
+
+    # Удаляем элементы, которые не видны пользователю
+    for element in soup(["script", "style", "meta", "link", "head", "title"]):
+        element.decompose()
+
+    # Получаем текст
+    text = soup.get_text()
+
+    # Очищаем текст
+    lines = (line.strip() for line in text.splitlines())
+    chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
+    text = '\n'.join(chunk for chunk in chunks if chunk)
+
+    return text
+

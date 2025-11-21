@@ -45,7 +45,11 @@
                     <td>
                         <input type="checkbox" class="site-check" value="{{ s.id }}" />
                     </td>
-                    <td>{{ s.name }}</td>
+                      <td>
+                        <span id="site-name-{{ s.id }}">{{ s.name }}</span>
+                        <button class="icon-btn btn-edit-sitename" data-id="{{ s.id }}" data-name="{{ s.name|escape }}" title="Переименовать">✎</button>
+                      </td>
+
                     <td>{{ s.created_at|date:"d.m.Y H:i" }}</td>
                    <td>
                        <div class="site-status muted" data-site-id="{{ s.id }}">—</div>
@@ -84,6 +88,8 @@
 
 
 {% include 'components/modal_create_site.html' with modal_id="modal_create_site" %}
+{% include 'components/modal_edit_site_name.html' %}
+
 
 
 <script>
@@ -163,6 +169,7 @@ document.addEventListener('DOMContentLoaded', () => {
         btn.addEventListener('click', async (e) => {
             const id = e.currentTarget.getAttribute('data-id');
             if (!id) return;
+            if (!confirm('Вы действительно хотите удалить сайт?')) return;
             e.currentTarget.disabled = true;
 
             try {
@@ -210,7 +217,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (active > 0) overall = 'Выполняется';
       else if (error > 0) overall = 'Есть ошибки';
 
-      el.innerHTML = `${overall}: Активных: ${active}; `
+      el.textContent = `${overall}: Активных: ${active}`;
         // + `ожидает: ${awaiting}, в работе: ${processing}, готово: ${done}, ошибка: ${error}`;
       el.classList.toggle('muted', false);
     }
@@ -244,6 +251,111 @@ document.addEventListener('DOMContentLoaded', () => {
 
 });
 </script>
+
+ <script>
+  (function() {
+    const modal = document.getElementById('modal_edit_site_name');
+    const input = document.getElementById('editSiteNameInput');
+    const btnSave = document.getElementById('editSiteNameSave');
+    const err = document.getElementById('editSiteNameError');
+    let currentSiteId = null;
+
+    function openModal(siteId, currentName) {
+      currentSiteId = siteId;
+      err.style.display = 'none';
+      input.value = currentName || '';
+      modal.removeAttribute('hidden');
+      modal.classList.add('active');
+      setTimeout(()=>input.focus(), 10);
+    }
+    function closeModal() {
+      modal.classList.remove('active');
+      modal.setAttribute('hidden','');
+      currentSiteId = null;
+    }
+    document.body.addEventListener('click', (e) => {
+      const sel = e.target?.getAttribute('data-close');
+      if (sel) {
+        const m = document.querySelector(sel);
+        if (m) m.classList.remove('active'), m.setAttribute('hidden','');
+      }
+      if (e.target && e.target.classList.contains('btn-edit-sitename')) {
+        const id = parseInt(e.target.getAttribute('data-id'), 10);
+        const name = e.target.getAttribute('data-name') || '';
+        openModal(id, name);
+      }
+    });
+
+    async function renameSite(id, name) {
+      const resp = await fetch(`/api/site/${id}/rename/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': getCookie('csrftoken'),
+          'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: JSON.stringify({ name })
+      });
+      return resp.json();
+    }
+
+    if (btnSave) {
+      btnSave.addEventListener('click', async () => {
+        const name = (input.value || '').trim();
+        if (!currentSiteId) return;
+        if (!name) {
+          err.textContent = 'Имя не должно быть пустым';
+          err.style.display = 'block';
+          return;
+        }
+        if (name.length > 120) {
+          err.textContent = 'Имя слишком длинное (макс. 120)';
+          err.style.display = 'block';
+          return;
+        }
+        btnSave.disabled = true;
+        try {
+          const r = await renameSite(currentSiteId, name);
+          if (!r.status) {
+            err.textContent = r.error || 'Ошибка сохранения';
+            err.style.display = 'block';
+            return;
+          }
+          const span = document.getElementById(`site-name-${currentSiteId}`);
+          if (span) span.textContent = r.name || name;
+
+          // обновим data-name у кнопки, если рядом в DOM
+          const rowBtn = document.querySelector(`.btn-edit-sitename[data-id="${currentSiteId}"]`);
+          if (rowBtn) rowBtn.setAttribute('data-name', r.name || name);
+
+          closeModal();
+        } catch(e) {
+          err.textContent = 'Ошибка сети';
+          err.style.display = 'block';
+        } finally {
+          btnSave.disabled = false;
+        }
+      });
+    }
+
+    // Горячие клавиши для модалки (Enter/Esc)
+    function modalIsOpen() { return !modal.hasAttribute('hidden'); }
+    function onKeyDown(e) {
+      if (!modalIsOpen()) return;
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        closeModal();
+      } else if (e.key === 'Enter') {
+        if (document.activeElement && document.activeElement.tagName === 'TEXTAREA') return;
+        e.preventDefault();
+        btnSave.click();
+      }
+    }
+    document.addEventListener('keydown', onKeyDown);
+
+  })();
+  </script>
+
 
 
 {% endblock %}

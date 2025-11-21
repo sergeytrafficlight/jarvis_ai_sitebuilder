@@ -715,6 +715,34 @@ def task_restart_stub(request, task_id: int):
 @require_POST
 def task_delete_stub(request, task_id: int):
     # Проверка доступа
-    _ = get_object_or_404(MyTask, id=task_id, sub_site__site__user=request.user)
+    task = get_object_or_404(MyTask, id=task_id, sub_site__site__user=request.user)
+    if task.status != MyTask.STATUS_ERROR:
+        return JsonResponse({"status": False, "message": f"Unexpected task status {task.status}"})
+
+    task.delete()
+
     # Заглушка: здесь позже будет логика удаления
     return JsonResponse({"status": True, "message": "Delete stub OK"})
+
+@login_required
+@require_POST
+def site_rename(request, site_id: int):
+  site = get_object_or_404(SiteProject, id=site_id, user=request.user)
+  try:
+      if request.content_type and "application/json" in request.content_type:
+          data = json.loads(request.body or "{}")
+          new_name = (data.get("name") or "").strip()
+      else:
+          new_name = (request.POST.get("name") or "").strip()
+  except Exception:
+      return JsonResponse({"status": False, "error": "Invalid JSON"}, status=400)
+
+  if not new_name:
+      return JsonResponse({"status": False, "error": "Имя не должно быть пустым"}, status=400)
+  if len(new_name) > 120:
+      return JsonResponse({"status": False, "error": "Имя слишком длинное (макс. 120)"}, status=400)
+
+  old_name = site.name
+  site.name = new_name
+  site.save(update_fields=["name"])
+  return JsonResponse({"status": True, "id": site.id, "name": site.name, "old_name": old_name})

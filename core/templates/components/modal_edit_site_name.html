@@ -1,0 +1,21 @@
+  <div class="modal-overlay" id="modal_edit_site_name" hidden>
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Переименовать сайт</h3>
+        <button class="modal-close" data-close="#modal_edit_site_name">✕</button>
+      </div>
+      <div class="modal-body">
+        <div style="display:grid;gap:10px;">
+          <label><strong>Новое имя</strong></label>
+          <input type="text" id="editSiteNameInput" placeholder="Введите новое имя сайта"
+                 style="background: rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:10px 12px; color:var(--text);" />
+          <div class="muted" id="editSiteNameHint">Максимум 120 символов</div>
+          <div class="muted" id="editSiteNameError" style="color:#fecaca; display:none;"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-primary" id="editSiteNameSave">Сохранить</button>
+        <button class="btn btn-secondary" data-close="#modal_edit_site_name">Отмена</button>
+      </div>
+    </div>
+  </div>

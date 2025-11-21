@@ -73,10 +73,16 @@
 </style>
 
 <div class="site-title-row" style="display:flex; align-items:center; gap:12px;">
-  <h2 id="site_name" style="margin:0; flex:1 1 auto;">{{ site.name }}</h2>
-  <div id="site_spend" class="muted" style="margin-left:auto; white-space:nowrap;">
-    Расход: {{ site.get_balance|default:0|floatformat:6 }} USD
-  </div>
+
+    <div class="site-title-row" style="display:flex; align-items:center; gap:12px;">
+      <h2 id="site_name" style="margin:0; flex:0 0 auto;">{{ site.name }}</h2>
+      <button class="btn btn-secondary" id="btnEditSiteName" title="Переименовать">✎</button>
+      <div id="site_spend" class="muted" style="margin-left:auto; white-space:nowrap; text-align:right;">
+        Расход: {{ site.get_balance|default:0|floatformat:6 }} USD
+      </div>
+    </div>
+
+
 </div>
 
 
@@ -161,6 +167,8 @@
 
 {% include 'components/modal_iframe_img_edit.html'%}
 {% include 'components/modal_iframe_text_edit.html'%}
+{% include 'components/modal_edit_site_name.html' %}
+
 
 <script>
 (function() {
@@ -856,6 +864,85 @@ if (imgUrlBtn) {
     return r.json();
   }
 
+    let __currentTipEl = null;
+    let __tipAnchorRect = null;
+    let __tipScrollHandler = null;
+    let __tipResizeHandler = null;
+
+    function showTaskTooltip(anchorEl, text) {
+      hideTaskTooltip(); // на всякий случай
+
+      // создаем элемент тултипа
+      const tip = document.createElement('div');
+      tip.className = 'global-tooltip';
+      tip.textContent = text;
+      document.body.appendChild(tip);
+
+      // позиционируем
+      const rect = anchorEl.getBoundingClientRect();
+      __tipAnchorRect = rect;
+
+      // первичное позиционирование
+      positionTooltip(tip, rect);
+
+      // при скролле/resize — просто скрывать (проще и безопаснее)
+      __tipScrollHandler = () => hideTaskTooltip();
+      __tipResizeHandler = () => hideTaskTooltip();
+      window.addEventListener('scroll', __tipScrollHandler, true);
+      window.addEventListener('resize', __tipResizeHandler);
+
+      __currentTipEl = tip;
+    }
+
+    function hideTaskTooltip() {
+      if (__currentTipEl) {
+        try { __currentTipEl.remove(); } catch(e){}
+        __currentTipEl = null;
+      }
+      if (__tipScrollHandler) {
+        window.removeEventListener('scroll', __tipScrollHandler, true);
+        __tipScrollHandler = null;
+      }
+      if (__tipResizeHandler) {
+        window.removeEventListener('resize', __tipResizeHandler);
+        __tipResizeHandler = null;
+      }
+      __tipAnchorRect = null;
+    }
+
+    function positionTooltip(tip, anchorRect) {
+      const vw = window.innerWidth || document.documentElement.clientWidth;
+      const vh = window.innerHeight || document.documentElement.clientHeight;
+
+      // сначала разместим под элементом
+      const margin = 6;
+      tip.style.visibility = 'hidden';
+      tip.style.top = '0px';
+      tip.style.left = '0px';
+
+      // нужно измерить габариты
+      const tmp = tip.getBoundingClientRect();
+      let left = anchorRect.left;
+      let top = anchorRect.bottom + margin;
+
+      // если не умещается по ширине — подрезаем слева
+      if (left + tmp.width + 8 > vw) {
+        left = Math.max(8, vw - tmp.width - 8);
+      }
+
+      // если снизу не влазит — попробуем показать над элементом
+      if (top + tmp.height + 8 > vh) {
+        top = anchorRect.top - tmp.height - margin;
+      }
+      // Если и сверху не влазит — зафиксируем на 8px от верха
+      if (top < 8) top = 8;
+
+      tip.style.left = `${left}px`;
+      tip.style.top = `${top}px`;
+      tip.style.visibility = 'visible';
+    }
+
+
   function renderTasks(items) {
       if (!tasksList) return;
       tasksList.innerHTML = '';
@@ -867,89 +954,92 @@ if (imgUrlBtn) {
         const li = document.createElement('li');
         li.className = 'task-item';
 
-        // Бейдж статуса
+        // Верхняя строка
+        const row = document.createElement('div');
+        row.className = 'task-row';
+
         const badge = document.createElement('span');
         badge.className = 'task-badge ' + badgeClass(t.status);
         badge.textContent = t.status_label;
 
-        // Бейдж типа таска
         const typeChip = document.createElement('span');
         typeChip.className = 'task-type-badge';
         typeChip.textContent = t.type_label || t.type;
 
-        // Основная часть
         const main = document.createElement('div');
         main.className = 'task-main';
 
         const title = document.createElement('div');
         title.className = 'task-title';
-        // Оставляем заголовок короче: имя после типа переносим сюда при наличии
         title.textContent = t.name ? `— ${t.name}` : '';
 
         main.appendChild(title);
 
-        // Кнопки действий
-        const actions = document.createElement('div');
-        actions.className = 'task-actions';
+        row.appendChild(badge);
+        row.appendChild(typeChip);
+        row.appendChild(main);
+        li.appendChild(row);
 
-        const btnEdit = document.createElement('button');
-        btnEdit.className = 'icon-btn';
-        btnEdit.title = 'Редактировать';
-        btnEdit.textContent = '✎';
-        btnEdit.addEventListener('click', () => openTaskEditModal(t));
-
-        const btnRestart = document.createElement('button');
-        btnRestart.className = 'icon-btn';
-        btnRestart.title = 'Перезапустить';
-        btnRestart.textContent = '↻';
-        btnRestart.addEventListener('click', async () => {
-          btnRestart.disabled = true;
-          try {
-            await apiPost(`/api/task/${t.id}/restart/`);
-            await loadTasks();
-          } catch(e) {} finally { btnRestart.disabled = false; }
-        });
-
-        const btnDelete = document.createElement('button');
-        btnDelete.className = 'icon-btn';
-        btnDelete.title = 'Удалить';
-        btnDelete.textContent = '🗑';
-        btnDelete.addEventListener('click', async () => {
-          if (!confirm('Удалить задачу?')) return;
-          btnDelete.disabled = true;
-          try {
-            await apiPost(`/api/task/${t.id}/delete/`);
-            await loadTasks();
-          } catch(e) {} finally { btnDelete.disabled = false; }
-        });
-
-        actions.appendChild(btnEdit);
-        actions.appendChild(btnRestart);
-        actions.appendChild(btnDelete);
-
-        // Собираем
-        li.appendChild(badge);
-        li.appendChild(typeChip);
-        li.appendChild(main);
-        li.appendChild(actions);
-
-        // Подсказка с ошибкой (только при наведении)
-        if (t.status === 'error' && (t.message || '').trim().length) {
+        // Только для ошибок — текст ошибки внизу + кнопки
+        if (t.status === 'error') {
           li.classList.add('has-error');
 
-          // Всплывающий хинт
-          const tip = document.createElement('div');
-          tip.className = 'task-error-tip';
-          tip.textContent = t.message;
-          li.appendChild(tip);
 
-          // Фолбэк для мобильных — системная подсказка
-          li.setAttribute('title', t.message);
+
+          // навешиваем ховер для тултипа
+          const message = (t.message || '').trim();
+          if (message) {
+            li.addEventListener('mouseenter', () => showTaskTooltip(li, message));
+            li.addEventListener('mouseleave', hideTaskTooltip);
+          }
+
+          // Кнопки действий оставляем как были (редактировать/перезапустить/удалить)
+          const actions = document.createElement('div');
+          actions.className = 'task-actions-row';
+
+          const btnEdit = document.createElement('button');
+          btnEdit.className = 'icon-btn';
+          btnEdit.title = 'Редактировать';
+          btnEdit.textContent = '✎';
+          btnEdit.addEventListener('click', () => openTaskEditModal(t));
+
+          const btnRestart = document.createElement('button');
+          btnRestart.className = 'icon-btn';
+          btnRestart.title = 'Перезапустить';
+          btnRestart.textContent = '↻';
+          btnRestart.addEventListener('click', async () => {
+            btnRestart.disabled = true;
+            try {
+              await apiPost(`/api/task/${t.id}/restart/`);
+              await loadTasks();
+            } catch(e) {} finally { btnRestart.disabled = false; }
+          });
+
+          const btnDelete = document.createElement('button');
+          btnDelete.className = 'icon-btn';
+          btnDelete.title = 'Удалить';
+          btnDelete.textContent = '🗑';
+          btnDelete.addEventListener('click', async () => {
+            if (!confirm('Удалить задачу?')) return;
+            btnDelete.disabled = true;
+            try {
+              await apiPost(`/api/task/${t.id}/delete/`);
+              await loadTasks();
+            } catch(e) {} finally { btnDelete.disabled = false; }
+          });
+
+          actions.appendChild(btnEdit);
+          actions.appendChild(btnRestart);
+          actions.appendChild(btnDelete);
+          li.appendChild(actions);
         }
+
 
         tasksList.appendChild(li);
       }
     }
+
+
 
 
   async function loadTasks() {
@@ -1065,6 +1155,106 @@ if (imgUrlBtn) {
   });
 })();
 </script>
+
+<script>
+  (function() {
+    const modal = document.getElementById('modal_edit_site_name');
+    const input = document.getElementById('editSiteNameInput');
+    const btnSave = document.getElementById('editSiteNameSave');
+    const btnOpen = document.getElementById('btnEditSiteName');
+    const err = document.getElementById('editSiteNameError');
+    const siteNameEl = document.getElementById('site_name');
+    const siteId = {{ site.id }};
+
+    function openModal(currentName) {
+      err.style.display = 'none';
+      input.value = currentName || '';
+      modal.removeAttribute('hidden');
+      modal.classList.add('active');
+      setTimeout(()=>input.focus(), 10);
+    }
+    function closeModal() {
+      modal.classList.remove('active');
+      modal.setAttribute('hidden','');
+    }
+    document.body.addEventListener('click', (e) => {
+      const sel = e.target?.getAttribute('data-close');
+      if (sel) {
+        const m = document.querySelector(sel);
+        if (m) m.classList.remove('active'), m.setAttribute('hidden','');
+      }
+    });
+
+    if (btnOpen) {
+      btnOpen.addEventListener('click', () => {
+        const currentName = siteNameEl ? siteNameEl.textContent.trim() : '';
+        openModal(currentName);
+      });
+    }
+
+    async function renameSite(id, name) {
+      const resp = await fetch(`/api/site/${id}/rename/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': getCookie('csrftoken'),
+          'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: JSON.stringify({ name })
+      });
+      return resp.json();
+    }
+
+    if (btnSave) {
+      btnSave.addEventListener('click', async () => {
+        const name = (input.value || '').trim();
+        if (!name) {
+          err.textContent = 'Имя не должно быть пустым';
+          err.style.display = 'block';
+          return;
+        }
+        if (name.length > 120) {
+          err.textContent = 'Имя слишком длинное (макс. 120)';
+          err.style.display = 'block';
+          return;
+        }
+        btnSave.disabled = true;
+        try {
+          const r = await renameSite(siteId, name);
+          if (!r.status) {
+            err.textContent = r.error || 'Ошибка сохранения';
+            err.style.display = 'block';
+            return;
+          }
+          if (siteNameEl) siteNameEl.textContent = r.name || name;
+          closeModal();
+        } catch(e) {
+          err.textContent = 'Ошибка сети';
+          err.style.display = 'block';
+        } finally {
+          btnSave.disabled = false;
+        }
+      });
+    }
+
+    // Горячие клавиши для модалки (Enter/Esc)
+    function modalIsOpen() { return !modal.hasAttribute('hidden'); }
+    function onKeyDown(e) {
+      if (!modalIsOpen()) return;
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        closeModal();
+      } else if (e.key === 'Enter') {
+        // если вдруг окажетесь в textarea — не ловим Enter
+        if (document.activeElement && document.activeElement.tagName === 'TEXTAREA') return;
+        e.preventDefault();
+        btnSave.click();
+      }
+    }
+    document.addEventListener('keydown', onKeyDown);
+
+  })();
+  </script>
 
 
 {% endblock %}

@@ -39,4 +39,6 @@ urlpatterns = [
     path("api/task/<int:task_id>/restart/", views.task_restart_stub, name="task_restart_stub"),
     path("api/task/<int:task_id>/delete/", views.task_delete_stub, name="task_delete_stub"),
 
+    path("api/site/<int:site_id>/rename/", views.site_rename, name="site_rename"),
+
 ]

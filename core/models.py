@@ -214,7 +214,7 @@ class SystemPrompts(models.Model):
 
 
 class AICommunicationLog(models.Model):
-    task = models.ForeignKey(MyTask, on_delete=models.PROTECT, related_name="log")
+    task = models.ForeignKey(MyTask, on_delete=models.CASCADE, related_name="log")
     ai_type = models.CharField(max_length=20, choices=TYPE_CHOICES, null=True, blank=True, default=None)
     ai_model = models.CharField(max_length=20, choices=MODEL_CHOICES, null=True, blank=True, default=None)
     created_at = models.DateTimeField(auto_now_add=True)

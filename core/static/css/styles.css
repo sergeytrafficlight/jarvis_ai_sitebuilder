@@ -595,20 +595,25 @@ a:hover {
   border: 1px dashed rgba(255,255,255,0.18);
   background: rgba(79,70,229,0.06);
 }
+
 .subtasks-title {
   font-size: 13px;
   color: #c7d2fe;
   margin-bottom: 6px;
 }
+
 .tasks-list {
   list-style: none;
   padding: 0;
   margin: 0;
+  overflow-x: hidden; /* страховка от горизонтального скролла */
 }
+
 .task-item {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  flex-direction: column;  /* ВОТ ТУТ: кладём всё столбцом */
+  align-items: stretch;
+  gap: 6px;
   padding: 6px 8px;
   border-radius: 10px;
   border: 1px solid rgba(255,255,255,0.06);
@@ -616,6 +621,7 @@ a:hover {
   margin-bottom: 6px;
 }
 .task-item:last-child { margin-bottom: 0; }
+/* Бейдж статуса */
 .task-badge {
   font-size: 12px;
   padding: 2px 6px;
@@ -626,6 +632,7 @@ a:hover {
 .task-badge.processing { color: #fdba74; border-color: rgba(253,186,116,0.4); background: rgba(234,88,12,0.12); }
 .task-badge.error { color: #fecaca; border-color: rgba(254,202,202,0.4); background: rgba(239,68,68,0.12); }
 
+
 .task-main {
   display: flex;
   align-items: center;
@@ -633,11 +640,21 @@ a:hover {
   flex: 1 1 auto;
   min-width: 0;
 }
+
 .task-title {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* Ряд кнопок действий — под задачей */
+.task-actions-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;       /* чтобы кнопки переносились и не тянули ширину */
+}
+
+
 .task-actions {
   display: flex;
   gap: 6px;
@@ -654,6 +671,33 @@ a:hover {
   background: rgba(255,255,255,0.06);
 }
 
+.icon-btn {
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.12);
+  padding: 6px 8px;
+  border-radius: 8px;
+  color: var(--text);
+  cursor: pointer;
+}
+.icon-btn:hover {
+  background: rgba(255,255,255,0.06);
+}
+
+
+/* Сообщение об ошибке — под задачей, в потоке, с переносами */
+.task-error-msg {
+  color: #fecaca;
+  background: rgba(239,68,68,0.08);
+  border: 1px solid rgba(239,68,68,0.35);
+  padding: 8px 10px;
+  border-radius: 8px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+
+
+
 /* Тип таска — бейдж */
 .task-type-badge {
   font-size: 11px;
@@ -664,26 +708,49 @@ a:hover {
   background: rgba(59,130,246,0.12);
 }
 
+
 /* Для хинта ошибки */
 .task-item { position: relative; }
 
-.task-error-tip {
-  display: none;
-  position: absolute;
-  left: 8px;
-  top: calc(100% + 6px);
-  max-width: 320px;
-  background: rgba(17,24,39,0.96);
-  color: #fecaca;
-  padding: 8px 10px;
-  border: 1px solid rgba(239,68,68,0.5);
-  border-radius: 8px;
-  box-shadow: 0 6px 24px rgba(0,0,0,0.35);
-  z-index: 20;
-  white-space: normal;
-  pointer-events: none;
-}
+.task-error-tip { display: none !important; }
+
 
 .task-item.has-error:hover .task-error-tip {
   display: block;
 }
+
+.task-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Иконка-индикатор ошибки в строке задачи */
+.task-error-indicator {
+  color: #fecaca;
+  background: rgba(239,68,68,0.12);
+  border: 1px solid rgba(239,68,68,0.35);
+  padding: 0 6px;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 20px;
+}
+
+/* Глобальный тултип ошибки поверх всей страницы */
+.global-tooltip {
+  position: fixed;
+  z-index: 2000;
+  max-width: 480px;
+  padding: 8px 10px;
+  background: rgba(17,24,39,0.96); /* темный фон */
+  color: #fecaca;                   /* красный текст */
+  border: 1px solid rgba(239,68,68,0.5);
+  border-radius: 8px;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.35);
+  pointer-events: none;             /* чтобы не перехватывать ховер */
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+/* Можно скрыть старую «в потоке» ошибку, если где-то ещё всплывёт */
+.task-error-msg { display: none !important; }

@@ -1,12 +1,258 @@
+<!DOCTYPE html>
 {% extends 'base.html' %}
 {% load i18n %}
-{% block title %}{% trans "Добро пожаловать" %}{% endblock %}
+{% block title %}{% trans "AI генерация лендингов" %}{% endblock %}
+
 {% block content %}
-<div class="hero">
-    <h1>{% trans "AI генерация лендингов" %}</h1>
-    <p>{% trans "Войдите через Google, чтобы начать." %}</p>
+<style>
+  /* Стили только для главной страницы (изолированы префиксом .landing-) */
+  .landing-hero {
+    position: relative;
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 16px;
+    padding: 64px 20px;
+    overflow: hidden;
+    background:
+      radial-gradient(1200px 600px at -10% -20%, rgba(79,70,229,0.22), rgba(79,70,229,0.02) 60%),
+      radial-gradient(900px 500px at 110% -10%, rgba(16,185,129,0.16), rgba(16,185,129,0.02) 55%),
+      var(--card);
+  }
+
+  .landing-hero .title {
+    margin: 0 0 10px 0;
+    font-size: clamp(28px, 4.2vw, 44px);
+    letter-spacing: -0.02em;
+  }
+  .landing-hero .subtitle {
+    color: var(--muted);
+    font-size: clamp(15px, 2vw, 18px);
+    max-width: 820px;
+    margin: 8px auto 18px auto;
+  }
+  .landing-hero .cta {
+    margin-top: 18px;
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .landing-hero .note {
+    margin-top: 12px;
+    color: var(--muted);
+    font-size: 13px;
+  }
+
+  .landing-badges {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-top: 14px;
+  }
+  .landing-badge {
+    border: 1px solid rgba(255,255,255,0.08);
+    background: rgba(255,255,255,0.03);
+    color: #cbd5e1;
+    font-size: 13px;
+    padding: 6px 10px;
+    border-radius: 999px;
+  }
+
+  .landing-section {
+    margin-top: 24px;
+  }
+  .landing-section .section-title {
+    margin: 0 0 10px;
+    font-size: 22px;
+  }
+  .landing-grid {
+    display: grid;
+    gap: 14px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  @media (max-width: 960px) {
+    .landing-grid { grid-template-columns: 1fr; }
+  }
+
+  .landing-feature {
+    display: grid;
+    grid-template-columns: 46px 1fr;
+    gap: 12px;
+    align-items: start;
+  }
+  .landing-feature .icon {
+    width: 46px;
+    height: 46px;
+    border-radius: 12px;
+    display: grid;
+    place-items: center;
+    font-size: 22px;
+    border: 1px solid rgba(255,255,255,0.08);
+    background: rgba(255,255,255,0.03);
+  }
+  .landing-feature h4 {
+    margin: 0 0 6px;
+    font-size: 16px;
+  }
+  .landing-feature p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  .landing-steps {
+    display: grid;
+    gap: 14px;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  @media (max-width: 1100px) {
+    .landing-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @media (max-width: 720px) {
+    .landing-steps { grid-template-columns: 1fr; }
+  }
+  .landing-step {
+    display: grid;
+    grid-template-columns: 42px 1fr;
+    gap: 12px;
+    align-items: start;
+  }
+  .landing-step .num {
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+    display: grid;
+    place-items: center;
+    color: #c7d2fe;
+    border: 1px solid rgba(79,70,229,0.45);
+    background: rgba(79,70,229,0.1);
+    font-weight: 600;
+  }
+  .landing-step h4 {
+    margin: 0 0 6px;
+    font-size: 16px;
+  }
+  .landing-step p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  .landing-cta-wide {
+    text-align: center;
+    padding: 18px;
+    border-radius: 14px;
+    border: 1px dashed rgba(255,255,255,0.12);
+    background: rgba(79,70,229,0.06);
+    margin-top: 14px;
+  }
+</style>
+
+<div class="landing-hero card center">
+  <h1 class="title">{% trans "Создавайте лендинги с помощью ИИ за минуты" %}</h1>
+  <p class="subtitle">
+    {% trans "Задайте промт или приложите ссылку-референс — система сгенерирует готовый статический сайт. Встроенный редактор позволяет править тексты и изображения в пару кликов." %}
+  </p>
+
+  <div class="cta">
     <a class="btn btn-google" href="{% url 'social:begin' 'google-oauth2' %}?next={% url 'dashboard' %}">
-        {% trans "Войти с Google" %}
+      {% trans "Войти с Google" %}
     </a>
+    <a class="btn btn-secondary" href="#how">
+      {% trans "Как это работает" %}
+    </a>
+  </div>
+
+  <div class="landing-badges">
+    <div class="landing-badge">⚡ {% trans "Генерация по промту и/или референсу" %}</div>
+    <div class="landing-badge">🖼 {% trans "AI‑редактор изображений" %}</div>
+    <div class="landing-badge">✏ {% trans "Редактирование текстов прямо в превью" %}</div>
+    <div class="landing-badge">💾 {% trans "Скачивание HTML/CSS всего проекта" %}</div>
+  </div>
+
+  <div class="note">{% trans "Безопасно. Быстро. Удобно." %}</div>
 </div>
+
+<section class="landing-section">
+  <h3 class="section-title">{% trans "Что внутри" %}</h3>
+  <div class="landing-grid">
+    <div class="card landing-feature">
+      <div class="icon">🧠</div>
+      <div>
+        <h4>{% trans "Гибкая генерация" %}</h4>
+        <p>{% trans "Сайт по вашему описанию или максимально близкая копия предоставленного референса — выбирайте режим в один клик." %}</p>
+      </div>
+    </div>
+
+    <div class="card landing-feature">
+      <div class="icon">🛠</div>
+      <div>
+        <h4>{% trans "Встроенный редактор" %}</h4>
+        <p>{% trans "Модальный редактор текста и изображений с AI‑помощником. Селекторы, перезапись файлов и история задач — уже из коробки." %}</p>
+      </div>
+    </div>
+
+    <div class="card landing-feature">
+      <div class="icon">📦</div>
+      <div>
+        <h4>{% trans "Экспорт в один клик" %}</h4>
+        <p>{% trans "Готовый архив проекта (HTML/CSS/изображения) для публикации на любом статическом хостинге." %}</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="how" class="landing-section">
+  <h3 class="section-title">{% trans "Как это работает" %}</h3>
+  <div class="landing-steps">
+    <div class="card landing-step">
+      <div class="num">1</div>
+      <div>
+        <h4>{% trans "Авторизация через Google" %}</h4>
+        <p>{% trans "Войдите, чтобы перейти в дашборд и начать работу." %}</p>
+      </div>
+    </div>
+    <div class="card landing-step">
+      <div class="num">2</div>
+      <div>
+        <h4>{% trans "Создание сайта" %}</h4>
+        <p>{% trans "Задайте промт и/или ссылку на референс — ИИ соберёт структуру и контент." %}</p>
+      </div>
+    </div>
+    <div class="card landing-step">
+      <div class="num">3</div>
+      <div>
+        <h4>{% trans "Правки контента" %}</h4>
+        <p>{% trans "Откройте превью, кликните по тексту или изображению — внесите изменения вручную или через AI." %}</p>
+      </div>
+    </div>
+    <div class="card landing-step">
+      <div class="num">4</div>
+      <div>
+        <h4>{% trans "Экспорт" %}</h4>
+        <p>{% trans "Скачайте ZIP и разверните лендинг на своём хостинге." %}</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="landing-cta-wide">
+    <div style="margin-bottom:10px; font-weight:600;">{% trans "Готовы попробовать?" %}</div>
+    <a class="btn btn-google" href="{% url 'social:begin' 'google-oauth2' %}?next={% url 'dashboard' %}">
+      {% trans "Войти с Google и начать" %}
+    </a>
+  </div>
+</section>
+
+<section class="landing-section">
+  <h3 class="section-title">{% trans "Кому подойдёт" %}</h3>
+  <div class="card" style="display:flex; gap:8px; flex-wrap:wrap;">
+    <span class="landing-badge">🚀 {% trans "Стартапам и соло‑основателям" %}</span>
+    <span class="landing-badge">🎯 {% trans "Маркетологам" %}</span>
+    <span class="landing-badge">🧪 {% trans "Тестирование гипотез" %}</span>
+    <span class="landing-badge">📣 {% trans "Промо‑страницы" %}</span>
+    <span class="landing-badge">📚 {% trans "Учебные проекты" %}</span>
+  </div>
+</section>
 {% endblock %}

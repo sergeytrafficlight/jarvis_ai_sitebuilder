@@ -2,6 +2,7 @@ import time
 import json
 import requests
 import threading
+from bs4 import BeautifulSoup
 from celery import shared_task, Task
 from ai.ai import ai_log, ai_log_update
 from core.models import SiteProject, MyTask, SystemPrompts, SubSiteProject, ImageAIEditConversation, ImageAIEdit
@@ -14,6 +15,7 @@ from config import THREADS_PARALLEL_MAX_COUNT, SITE_URL
 from core.screenshot import generate_screenshort
 from core.site_analyzer import SiteAnalyzer
 from core.funds_balance import charge
+from core.tools import get_visible_text
 
 from core.log import *
 logger.setLevel(logging.DEBUG)
@@ -98,6 +100,7 @@ def run_task_generate_site(task: MyTask):
     logger.debug(f"ref url: {site.ref_site_url}, generate screenshot ")
 
     screenshot_path = None
+    html_text = None
     if site.ref_site_url:
         r, result = generate_screenshort(task.sub_site.site.user, site.ref_site_url, task.sub_site.site.user)
         if not result:
@@ -107,6 +110,11 @@ def run_task_generate_site(task: MyTask):
         if screenshot_path.startswith("/"):
             screenshot_path = screenshot_path[1:]
 
+        response = requests.get(site.ref_site_url)
+        response.raise_for_status()
+        html_text = get_visible_text(response.text)
+
+
     payload = task.data_payload
     user_prompt = payload['prompt']
 
@@ -115,6 +123,10 @@ def run_task_generate_site(task: MyTask):
     prompt += SystemPrompts.objects.get(type=SystemPrompts.SP_NAME_BASE_JSON).prompt
     if screenshot_path:
         prompt += "\n" + SystemPrompts.objects.get(type=SystemPrompts.SP_NAME_SITE_COPY).prompt
+    if html_text:
+        prompt += "\nHTML код сайта со скриншота (BEGIN)\n"
+        prompt += html_text
+        prompt += "\nHTML код сайта со скриншота (END)\n"
     prompt += "\nЗапрос пользователя для генерации html сайта:\n"
     prompt += user_prompt
 
