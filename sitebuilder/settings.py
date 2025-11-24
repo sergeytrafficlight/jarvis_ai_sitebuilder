@@ -8,8 +8,10 @@ import sentry_sdk
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = 'change_me_on_prod'
-DEBUG = True
+STATIC_ROOT = 'static/'
+
+SECRET_KEY = 'change_me_on_prod12783917'
+DEBUG = False
 ALLOWED_HOSTS = ["*"]
 
 USER_FILES_ROOT = f"{BASE_DIR}/users"
