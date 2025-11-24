@@ -10,3 +10,4 @@ httpx
 openai
 bs4
 Pillow
+sentry-sdk[django]

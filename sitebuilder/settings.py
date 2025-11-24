@@ -4,6 +4,7 @@ import secrets
 import config
 from urllib.parse import urlparse
 from django.utils.translation import gettext_lazy as _
+import sentry_sdk
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -153,3 +154,7 @@ CELERY_TASK_SOFT_TIME_LIMIT = 60 * 9
 CELERY_TASK_SERIALIZER = "json"
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_RESULT_SERIALIZER = "json"
+
+sentry_sdk.init(
+    dsn="https://a955cf2914fdd9f9f43290ce1af65996@nsentry.itvx.biz/6",
+)

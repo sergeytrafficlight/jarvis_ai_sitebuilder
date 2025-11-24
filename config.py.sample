@@ -11,14 +11,27 @@ MARIADB = {
     "PORT": os.getenv("DB_PORT", "3306"),
 }
 
-# Base site URL (adjust if you deploy elsewhere)
-SITE_URL = os.getenv("SITE_URL", "http://localhost:8000")
+'''
+GOOGLE_OAUTH = {
+    "CLIENT_ID": os.getenv("GOOGLE_CLIENT_ID", ""),
+    "CLIENT_SECRET": os.getenv("GOOGLE_CLIENT_SECRET", ""),
+}
+'''
 
 GOOGLE_OAUTH = {
     "CLIENT_ID": os.getenv("GOOGLE_CLIENT_ID", ""),
     "CLIENT_SECRET": os.getenv("GOOGLE_CLIENT_SECRET", ""),
 }
 
+# Base site URL (adjust if you deploy elsewhere)
+SITE_URL = os.getenv("SITE_URL", "http://localhost:8000")
+
 DIR_USER_PREFIX = 'users'
 DIR_IMAGES_PREFIX = 'imgs'
-DIF_SITES_PREFIX = 'sites'
+DIR_SITES_PREFIX = 'sites'
+
+AI_PROXY = f'http://192.168.88.11:3128'
+CHATGPT_API_KEY = ''
+
+
+THREADS_PARALLEL_MAX_COUNT = 5

@@ -44,6 +44,8 @@ from core.task_wrapper import task_generate_site_name_classification, task_gener
 from core.log import *
 logger.setLevel(logging.DEBUG)
 
+def trigger_error(request):
+    division_by_zero = 1 / 0
 
 def home(request):
     if request.user.is_authenticated:

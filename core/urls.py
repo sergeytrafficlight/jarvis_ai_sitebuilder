@@ -41,4 +41,6 @@ urlpatterns = [
 
     path("api/site/<int:site_id>/rename/", views.site_rename, name="site_rename"),
 
+    path('sentry-debug/', views.trigger_error, name='trigger_error'),
+
 ]
