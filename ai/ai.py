@@ -28,3 +28,6 @@ def get_text2img_answer(prompt: str, input_image_path: str, creative_enabled=Fal
 
 def get_edit_image_conversation(prompt: str, input_image:str, last_answer_id: str):
     return chatgpt.get_edit_image_conversation(prompt, input_image, last_answer_id)
+
+def get_expenses(start_date, end_date=None):
+    return chatgpt.get_expenses(start_date, end_date)

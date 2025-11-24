@@ -3,7 +3,7 @@ import requests
 import httpx
 import base64
 from openai import OpenAI, APITimeoutError
-from config import AI_PROXY, CHATGPT_API_KEY
+from config import AI_PROXY, CHATGPT_API_KEY, CHATGPT_API_KEY_ADMIN, CHATGPT_PROJECT_ID
 from ai.ai_answer import ai_answer
 from core.models import AIModelsSettings
 from core.models import MODEL_CHATGPT_5_1, MODEL_CHATGPT_IMG_1, MODEL_CHATGPT_5, MODEL_CHATGPT_4O
@@ -287,6 +287,7 @@ def get_edit_image_conversation(prompt: str, input_image_path:str, last_answer_i
 
 def get_expenses(start_date, end_date=None):
     # Используем контекстный менеджер для автоматического закрытия соединения
+
     if start_date:
         dt = datetime.strptime(start_date, '%Y-%m-%d')
         start_date = int(dt.timestamp())
@@ -300,28 +301,49 @@ def get_expenses(start_date, end_date=None):
         url = "https://api.openai.com/v1/organization/costs"
 
         headers = {
-            "Authorization": f"Bearer {CHATGPT_API_KEY}"
+            "Authorization": f"Bearer {CHATGPT_API_KEY_ADMIN}"
         }
 
         # Строим параметры запроса, используя "date" вместо "date_from"
-        params = {
-            "start_time": start_date,
-        }
-        if end_date:
-            params["end_time"] = end_date  # если есть end_date, добавляем его
+        next_page = None
+        total_costs = 0.0
 
-        # Выполняем запрос
-        try:
-            response = http_client.get(url, headers=headers, params=params)
-            response.raise_for_status()  # Поднимет исключение для ошибок HTTP (например 4xx, 5xx)
-        except httpx.HTTPStatusError as http_err:
-            raise Exception(f"API Error: {http_err.response.status_code} - {http_err.response.text}")
-        except Exception as err:
-            raise Exception(f"Request failed: {err}")
+        while True:
+            params = {
+                "start_time": start_date,
+                "project_ids": CHATGPT_PROJECT_ID,
+                'group_by': 'project_id',
+            }
 
-        # Обрабатываем данные ответа
-        costs_data = response.json()
-        print(f"costs: {costs_data}")
+            if next_page:
+                params['page'] = next_page
 
-        return 0
+            if end_date:
+                params["end_time"] = end_date  # если есть end_date, добавляем его
+
+            # Выполняем запрос
+            try:
+                response = http_client.get(url, headers=headers, params=params)
+                response.raise_for_status()  # Поднимет исключение для ошибок HTTP (например 4xx, 5xx)
+            except httpx.HTTPStatusError as http_err:
+                raise Exception(f"API Error: {http_err.response.status_code} - {http_err.response.text}")
+            except Exception as err:
+                raise Exception(f"Request failed: {err}")
+
+            costs_data = response.json()
+
+            data = costs_data['data']
+            for d in data:
+                results = d['results']
+                for r in results:
+                    amount = r['amount']
+                    value = amount['value']
+                    total_costs += float(value)
+            has_more = costs_data['has_more']
+            next_page = costs_data['next_page']
+
+            if not has_more:
+                break
+
+        return total_costs
 
