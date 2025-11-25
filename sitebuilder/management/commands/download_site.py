@@ -6,7 +6,8 @@ class Command(BaseCommand):
 
 
     def handle(self, *args, **options):
-        url = 'https://arterotonic.xcartpro.com/r1/?off=vvD4cMwq&lnk=85871&m=e993a8416c7af'
+        #url = 'https://arterotonic.xcartpro.com/r1/?off=vvD4cMwq&lnk=85871&m=e993a8416c7af'
+        url = 'https://www.affplus.com/'
         dir = 'test_dir/downloaded_site/'
 
         d = Downloader(url, dir)

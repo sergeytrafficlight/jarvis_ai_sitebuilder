@@ -162,6 +162,8 @@ def _compose_full_link(link, current_path):
         link = link[2:]
     elif link.startswith('/'):
         link = link[1:]
+    if not len(link):
+        return current_path
     if current_path.endswith('/'):
         path = current_path + link
     else:
@@ -239,6 +241,7 @@ class Downloader:
     def get_structure(self, url, current_depth):
         logger.debug(f"cycle url: {url}")
         clean_url = _clean_url(url)
+        logger.debug(f"clean url: {clean_url}")
         if clean_url in self.visited_url:
             logger.debug(f"already visited {clean_url}")
             return None
@@ -285,7 +288,9 @@ class Downloader:
         for l in links_html:
             if not _is_internal_link(l, self.my_domain):
                 continue
+
             new_link = _compose_full_link(l, clean_url)
+            logger.debug(f"link {l} clean url {clean_url}, composed {new_link}")
             self.get_structure(new_link, current_depth + 1)
 
 
