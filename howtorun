@@ -1,1 +1,4 @@
 celery -A sitebuilder worker --loglevel=INFO --concurrency=4
+
+sudo systemctl restart celery
+sudo systemctl status celery

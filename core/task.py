@@ -1,4 +1,5 @@
 import time
+import os
 import json
 import requests
 import threading
@@ -291,7 +292,10 @@ def run_task_edit_image(task: MyTask):
     logger.debug(f"prev answer id: {prev_answer_id}")
 
     log = ai_log(task, prompt)
-    answer = get_edit_image_conversation(prompt, full_path, prev_answer_id)
+    file_path_to_ai = None
+    if os.path.isfile(full_path):
+        file_path_to_ai = full_path
+    answer = get_edit_image_conversation(prompt, file_path_to_ai, prev_answer_id)
 
     conv.answer_id = answer.response_id
     conv.save(update_fields=['answer_id'])
@@ -351,6 +355,7 @@ def run_task_edit_site(task: MyTask):
             conv = ImageAIEditConversation.objects.create(
                 image_ai_edit=image,
                 prompt=prompt,
+                task=task,
             )
             task_edit_image(task.sub_site, conv)
         else:

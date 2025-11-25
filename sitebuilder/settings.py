@@ -6,13 +6,17 @@ from urllib.parse import urlparse
 from django.utils.translation import gettext_lazy as _
 import sentry_sdk
 
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 STATIC_ROOT = 'static/'
 
 SECRET_KEY = 'change_me_on_prod12783917'
-DEBUG = False
+import config as cfg
+
 ALLOWED_HOSTS = ["*"]
+
+DEBUG = cfg.DEBUG
 
 USER_FILES_ROOT = f"{BASE_DIR}/users"
 
@@ -139,6 +143,7 @@ CSRF_TRUSTED_ORIGINS = list({
     "http://localhost:8000",
     "https://127.0.0.1:8000",
     "https://localhost:8000",
+    cfg.SITE_URL,
 })
 
 CELERY_BROKER_URL = "redis://localhost:6379/0"
