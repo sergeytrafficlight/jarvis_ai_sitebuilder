@@ -3,4 +3,4 @@ config.py
 __pycache__/
 users/
 static/
-
+test_dir/

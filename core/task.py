@@ -311,6 +311,7 @@ def run_task_edit_site(task: MyTask):
     logger.debug(f"run edit site: {task.id}")
 
     user_prompt = task.data_payload['prompt']
+    rel_path = task.data_payload['current_rel_path']
 
     prompt = SystemPrompts.objects.get(type=SystemPrompts.SP_NAME_BASE).prompt
     prompt += SystemPrompts.objects.get(type=SystemPrompts.SP_NAME_SITE_EDIT_MAKE_PLAN).prompt
@@ -328,6 +329,8 @@ def run_task_edit_site(task: MyTask):
             prompt += str(info['relative']) + "\n"
             prompt += str(info) + "\n"
     prompt += "Структура сайта (END)\n"
+
+    prompt += f"Пользователь находится на этой странице: {rel_path}\n"
 
     prompt += "\nЗапрос пользователя:\n"
     prompt += user_prompt

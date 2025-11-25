@@ -53,10 +53,15 @@ def task_edit_image(sub_site: SubSiteProject, ai_edit_conversation: ImageAIEditC
     ai_edit_conversation.save(update_fields=['task'])
     return task
 
-def task_edit_site(sub_site: SubSiteProject, prompt: str):
+def task_edit_site(sub_site: SubSiteProject, prompt: str, current_url: str = None, current_rel_path: str = None):
     payload = {
         'prompt': prompt
     }
+    if current_url:
+        payload['current_url'] = current_url
+    if current_rel_path:
+        payload['current_rel_path'] = current_rel_path
+
     task = MyTask.objects.create(
         sub_site=sub_site,
         data_payload=payload,

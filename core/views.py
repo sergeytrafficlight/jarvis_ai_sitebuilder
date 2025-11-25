@@ -637,6 +637,7 @@ def site_correction_submit(request, site_id: int):
     # Проверяем, что сайт принадлежит пользователю
     site = get_object_or_404(SiteProject, id=site_id, user=request.user)
 
+    logger.debug("site_correction_submit")
     # Поддерживаем JSON и form-data
     prompt = ""
     sub_id = None
@@ -648,9 +649,13 @@ def site_correction_submit(request, site_id: int):
             payload = {}
         prompt = (payload.get("prompt") or "").strip()
         sub_id = payload.get("sub_id")
+        current_url = (payload.get("current_url") or "").strip()
+        current_rel_path = (payload.get("current_rel_path") or "").strip()
     else:
         prompt = (request.POST.get("prompt") or "").strip()
         sub_id = request.POST.get("sub_id")
+        current_url = (request.POST.get("current_url") or "").strip()
+        current_rel_path = (request.POST.get("current_rel_path") or "").strip()
 
     if not prompt:
         return JsonResponse({"ok": False, "error": "Текст запроса пустой"}, status=400)
@@ -672,7 +677,9 @@ def site_correction_submit(request, site_id: int):
     if sub.has_active_tasks():
         return JsonResponse({"ok": False, "error": "Subsite имеет активные задачи"}, status=404)
 
-    task_edit_site(sub, prompt)
+
+    print(f"sub: {sub}, url: {current_url} rel: {current_rel_path}")
+    task_edit_site(sub, prompt, current_url, current_rel_path)
     run_tasks.apply_async(args=[sub.id])
 
     return JsonResponse({

@@ -254,14 +254,15 @@
   const imgUrlInput = document.getElementById('imgUrlInput');
   const imgUrlBtn = document.getElementById('imgUrlBtn');
   let currentImageRelPath = '';
-
-
-
   // Эти значения нужны, чтобы вычислить относительный путь к файлу внутри сабсайта
   const userId = {{ request.user.id }};
   const siteId = {{ site.id }};
   const subId = {{ selected_sub.id|default:"null" }};
   const subDir = "{{ selected_sub.dir|default:'' }}";
+
+
+
+
 
   const state = {
     editMode: false,
@@ -1080,6 +1081,39 @@ if (imgUrlBtn) {
 
 <script>
     //отправка промта для коррекции ленда
+const userId = {{ request.user.id }};
+const siteId = {{ site.id }};
+const subDir = "{{ selected_sub.dir|default:'' }}";
+
+
+function getIframeCurrentUrl() {
+  const frame = document.getElementById('previewFrame');
+  try {
+    return frame?.contentWindow?.location?.href || frame?.src || null;
+  } catch (e) {
+    return frame?.src || null;
+  }
+}
+function getIframeCurrentRelPath() {
+  const frame = document.getElementById('previewFrame');
+  if (!frame) return null;
+  let p = '';
+  try {
+    p = frame.contentWindow?.location?.pathname || '';
+  } catch (e) {
+    try {
+      const u = new URL(frame.src, window.location.origin);
+      p = u.pathname;
+    } catch (_) {
+      p = '';
+    }
+  }
+  const basePrefix = `/users/${userId}/sites/${siteId}/${subDir}/`;
+  if (p.startsWith(basePrefix)) p = p.slice(basePrefix.length);
+  if (!p || p.endsWith('/')) p = (p || '') + 'index.html';
+  return p;
+}
+
 (function() {
   const siteId = {{ site.id }};
   const selectedSubId = {{ selected_sub.id|default:"null" }};
@@ -1112,6 +1146,9 @@ if (imgUrlBtn) {
     const text = (promptEl.value || '').trim();
     if (!text) return;
 
+    console.log("send correction");
+    console.log("url: " + getIframeCurrentUrl());
+    console.log("rel: " + getIframeCurrentRelPath());
     setSending(true);
     try {
       const resp = await fetch(`/sites/${siteId}/correction/`, {
@@ -1123,6 +1160,8 @@ if (imgUrlBtn) {
         },
         body: JSON.stringify({
           prompt: text,
+          current_url: getIframeCurrentUrl(),
+          current_rel_path: getIframeCurrentRelPath(),
           sub_id: selectedSubId || null
         })
       });
