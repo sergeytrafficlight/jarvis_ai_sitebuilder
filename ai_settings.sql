@@ -81,6 +81,32 @@ INSERT INTO `core_systemprompts` VALUES
 (7,'site_copy','Максимально сохрани стили, шрифты, разметку, иконки, картинки, выравнивание текста и сам текст с сайта');
 /*!40000 ALTER TABLE `core_systemprompts` ENABLE KEYS */;
 UNLOCK TABLES;
+
+--
+-- Table structure for table `core_paymentgatewaysettings`
+--
+
+DROP TABLE IF EXISTS `core_paymentgatewaysettings`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `core_paymentgatewaysettings` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT,
+  `type` varchar(20) NOT NULL,
+  `commission_extra` double NOT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `core_paymentgatewaysettings`
+--
+
+LOCK TABLES `core_paymentgatewaysettings` WRITE;
+/*!40000 ALTER TABLE `core_paymentgatewaysettings` DISABLE KEYS */;
+INSERT INTO `core_paymentgatewaysettings` VALUES
+(1,'cryptogator',0.005);
+/*!40000 ALTER TABLE `core_paymentgatewaysettings` ENABLE KEYS */;
+UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
 /*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
@@ -91,4 +117,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*M!100616 SET NOTE_VERBOSITY=@OLD_NOTE_VERBOSITY */;
 
--- Dump completed on 2025-11-25  8:58:55
+-- Dump completed on 2025-11-26 19:04:58

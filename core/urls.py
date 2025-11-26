@@ -43,4 +43,6 @@ urlpatterns = [
 
     path('sentry-debug/', views.trigger_error, name='trigger_error'),
 
+    path("api/payment/<str:gateway>/<uuid:topup_request_id>/topup/", views.payment_receive_topup, name="payment_receive_topup"),
+
 ]

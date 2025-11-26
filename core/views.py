@@ -755,3 +755,7 @@ def site_rename(request, site_id: int):
   site.name = new_name
   site.save(update_fields=["name"])
   return JsonResponse({"status": True, "id": site.id, "name": site.name, "old_name": old_name})
+
+
+def payment_receive_topup(request, gateway: str, topup_request_id: int):
+    pass

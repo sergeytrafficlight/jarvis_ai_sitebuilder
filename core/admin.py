@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Profile, Transaction, SiteProject, SystemPrompts, AICommunicationLog, AIModelsSettings, SubSiteProject, MyTask
+from .models import Profile, Transaction, SiteProject, SystemPrompts, AICommunicationLog, AIModelsSettings, SubSiteProject, MyTask, PaymentGatewaySettings
 
 
 @admin.register(Profile)
@@ -53,3 +53,9 @@ class AIModelsSettingsAdmin(admin.ModelAdmin):
       list_display = ("created_at", "updated_at", "sub_site", "name", "type", "status", "message", "data_payload")
       search_fields = []
       list_filter = ['status']
+
+  @admin.register(PaymentGatewaySettings)
+  class PaymentGatewaySettingsAdmin(admin.ModelAdmin):
+      list_display = ("type", "commission_extra")
+      search_fields = []
+      list_filter = []

@@ -1,4 +1,4 @@
-
+import uuid
 from django.db import models
 from django.contrib.auth.models import User
 from django.db.models.signals import post_save
@@ -6,6 +6,7 @@ from django.dispatch import receiver
 from django.utils.translation import gettext_lazy as _
 from django.core.validators import MinValueValidator
 from core.tools import get_image_path_for_user
+import payment.types as payment_types
 
 
 TYPE_CHATGPT = 'CHATGPT'
@@ -69,6 +70,54 @@ class Transaction(models.Model):
     def __str__(self):
 
         return f"{self.user.email} {self.created_at:%Y-%m-%d}"
+
+class TopUpRequest(models.Model):
+
+    STATUS_AWAITING = 'awaiting'
+    STATUS_DONE = 'done'
+    STATUS_ERROR = 'error'
+
+    STATUS_CHOICES = (
+        (STATUS_AWAITING, 'awaiting'),
+        (STATUS_DONE, 'done'),
+        (STATUS_ERROR, 'error'),
+    )
+
+    PROVIDER_CRYPTOGATOR = 'cryptogator'
+    PROVIDER_CHOICES = (
+        (PROVIDER_CRYPTOGATOR, PROVIDER_CRYPTOGATOR),
+    )
+
+    METHOD_TRON = 'Tron'
+    METHOD_ETHEREUM = 'Ethereum'
+    METHOD_CHOICES = (
+        (METHOD_TRON, METHOD_TRON),
+        (METHOD_ETHEREUM, METHOD_ETHEREUM),
+    )
+
+    CURRENCY_USDT = 'USDT'
+
+    CURRENCY_CHOICES = (
+        (CURRENCY_USDT, CURRENCY_USDT),
+    )
+
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False
+    )
+
+    user = models.ForeignKey(User, on_delete=models.PROTECT, related_name="topup_request")
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES)
+    provider = models.CharField(max_length=16, choices=PROVIDER_CHOICES)
+    method = models.CharField(max_length=10, choices=METHOD_CHOICES)
+    currency = models.CharField(max_length=10, choices=CURRENCY_CHOICES)
+    wallet_to_pay_address = models.CharField(max_length=255, null=True)
+    expired_at = models.DateTimeField(null=True)
+    amount_min_for_order = models.DecimalField(max_digits=10, decimal_places=6, null=True)
+    payment_gateway_transaction_id = models.CharField(max_length=256, null=True)
+
+
 
 
 class MyTask(models.Model):
@@ -254,6 +303,12 @@ class AIModelsSettings(models.Model):
         unique_together = [
             ("type", "model"),
         ]
+
+class PaymentGatewaySettings(models.Model):
+
+    type = models.CharField(max_length=20, choices=payment_types.GATEWAY_CHOICES)
+    commission_extra = models.FloatField()
+
 
 class ImageAIEdit(models.Model):
     sub_site = models.ForeignKey(SubSiteProject, on_delete=models.CASCADE, related_name="image_ai")
