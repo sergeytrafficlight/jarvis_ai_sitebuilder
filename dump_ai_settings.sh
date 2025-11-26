@@ -62,7 +62,7 @@ else
 fi
 
 # Создаем дамп указанных таблиц
-$DUMP_CMD -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASSWORD" "$DB_NAME" core_aimodelssettings core_systemprompts > "$DUMP_FILE"
+$DUMP_CMD -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASSWORD" "$DB_NAME" core_aimodelssettings core_systemprompts core_paymentgatewaysettings > "$DUMP_FILE"
 
 # Проверяем успешность выполнения
 if [ $? -eq 0 ]; then
