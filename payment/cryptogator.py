@@ -79,8 +79,8 @@ def get_topup(user: User, method: str, currency: str):
     response = requests.post(url, headers=headers, json=data)
     if response.status_code != 200:
         raise Exception(f"Repsonse code {response.status_code} ({payment_types.GATEWAY_CRYPTOGATOR}) {http_function}")
-    print(f"Status Code: {response.status_code}")
-    print(f"Response: {response.text}")
+    #print(f"Status Code: {response.status_code}")
+    #print(f"Response: {response.text}")
 
     try:
         settings = PaymentGatewaySettings.objects.get(type=payment_types.GATEWAY_CRYPTOGATOR)
@@ -108,6 +108,48 @@ def get_topup(user: User, method: str, currency: str):
     except ValueError as e:
         raise Exception(f"{payment_types.GATEWAY_CRYPTOGATOR} JSON error {str(e)}")
 
-
-
     return topup
+
+def webhook(post_data: str, topup_request_id: str):
+
+    try:
+        uuid = post_data.get('uuid')
+        amount = post_data.get('amount')
+        amount = float(amount)
+
+        currency = post_data.get("currency")
+        status = post_data.get('status')
+        trx_id = post_data.get('trxId')
+        target_currency = post_data.get('targetCurrency')
+        external_id = post_data.get('externalId')
+        customer_id = post_data.get('customerId')
+    except Exception as e:
+        raise Exception(f"{payment_types.GATEWAY_CRYPTOGATOR} wehook parsing error: {str(e)}")
+
+    if topup_request_id != external_id:
+        raise Exception(f"error 0x01")
+
+    user = User.objects.filter(
+        id=customer_id
+    ).first()
+
+    if not user:
+        raise Exception(f"error 0x02")
+
+    if not status == 'DONE':
+        raise Exception(f"error 0x03")
+
+
+    topup = TopUpRequest.objects.filter(
+        user=user,
+        status=TopUpRequest.STATUS_AWAITING,
+        provider=payment_types.GATEWAY_CRYPTOGATOR,
+        currency=currency,
+        payment_gateway_transaction_id=uuid,
+    ).first()
+
+    if not topup:
+        raise Exception(f"error 0x04")
+
+    
+
