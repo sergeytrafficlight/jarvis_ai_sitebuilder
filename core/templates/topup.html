@@ -2,14 +2,163 @@
 {% load i18n %}
 {% block title %}{% trans "Пополнение баланса" %}{% endblock %}
 {% block content %}
+
 <h2>{% trans "Пополнение баланса" %}</h2>
+
+<style>
+  .chips { display:flex; gap:10px; flex-wrap:wrap; }
+  .chip {
+    padding:10px 12px; border-radius:12px;
+    border:1px solid rgba(255,255,255,0.1);
+    background: rgba(255,255,255,0.03);
+    cursor: pointer; user-select: none;
+  }
+  .chip.disabled { opacity: .4; cursor:not-allowed; }
+  .chip.active {
+    border-color: rgba(79,70,229,0.5);
+    background: rgba(79,70,229,0.12);
+    color: #c7d2fe;
+  }
+  .muted { color: var(--muted); }
+  .section + .section { margin-top: 14px; }
+</style>
+
 <div class="card">
-    <form method="post" class="form-inline">
-        {% csrf_token %}
-        {{ form.amount.label_tag }}
-        {{ form.amount }}
-        <button type="submit" class="btn btn-primary">{% trans "Перейти к оплате" %}</button>
-    </form>
-    <p class="muted">{% trans "После нажатия произойдёт переход на платёжный шлюз (заглушка)." %}</p>
+  <div class="section">
+    <strong>1. Выберите валюту</strong>
+    <div class="muted" style="margin-top:4px;"></div>
+    <div id="currencyList" class="chips" style="margin-top:8px;"></div>
+  </div>
+
+  <div class="section">
+    <strong>2. Выберите сеть</strong>
+    <div class="muted" style="margin-top:4px;"></div>
+    <div id="methodList" class="chips" style="margin-top:8px;"></div>
+  </div>
+
+  <div class="section" style="display:flex; gap:8px; align-items:center;">
+    <input id="disclaimer" type="checkbox" />
+    <label for="disclaimer" class="muted" style="cursor:pointer;">
+      Сервис предоставляется «as is» и находится в бета‑режиме. Обратного вывода средств не предусмотрено.
+    </label>
+  </div>
+
+  <div class="section" style="text-align:right;">
+    <button id="topupBtn" class="btn btn-primary" disabled>Пополнить</button>
+  </div>
 </div>
+
+
+{{ pgs|json_script:"pgs-data" }}
+{{ currencies|json_script:"currencies-data" }}
+{{ methods|json_script:"methods-data" }}
+
+<script>
+  // Данные с бэка
+    const PGS = JSON.parse(document.getElementById('pgs-data').textContent);
+    const currencies = JSON.parse(document.getElementById('currencies-data').textContent);
+    const methods = JSON.parse(document.getElementById('methods-data').textContent);
+
+  // Простые иконки
+  const currencyIcon = {
+    "USDT": "🪙"
+  };
+  const methodIcon = {
+    "Tron": "⚡",
+    "Ethereum": "🕸"
+  };
+
+  // Состояние UI
+  let selectedCurrency = null;
+  let selectedMethod = null;
+
+  function isPairAvailable(cur, met) {
+    return PGS.some(x => x.currency === cur && x.method === met);
+  }
+
+  function renderCurrencies() {
+    const box = document.getElementById('currencyList');
+    box.innerHTML = '';
+    currencies.forEach(cur => {
+      const el = document.createElement('div');
+      el.className = 'chip' + (selectedCurrency === cur ? ' active' : '');
+      el.textContent = `${currencyIcon[cur] || '💱'} ${cur}`;
+      el.addEventListener('click', () => {
+        selectedCurrency = cur;
+        // если текущая сеть недоступна для новой валюты — сбросим выбор
+        if (selectedMethod && !isPairAvailable(selectedCurrency, selectedMethod)) {
+          selectedMethod = null;
+        }
+        renderCurrencies();
+        renderMethods();
+        updateBtn();
+      });
+      box.appendChild(el);
+    });
+  }
+
+  function renderMethods() {
+    const box = document.getElementById('methodList');
+    box.innerHTML = '';
+
+    methods.forEach(met => {
+      const available = !selectedCurrency || isPairAvailable(selectedCurrency, met);
+      const el = document.createElement('div');
+      el.className = 'chip' +
+        (available ? '' : ' disabled') +
+        (selectedMethod === met ? ' active' : '');
+
+      el.textContent = `${methodIcon[met] || '🌐'} ${met}`;
+      if (available) {
+        el.addEventListener('click', () => {
+          selectedMethod = met;
+          renderMethods();
+          updateBtn();
+        });
+      }
+      box.appendChild(el);
+    });
+  }
+
+  function updateBtn() {
+    const ok = !!(selectedCurrency && selectedMethod && document.getElementById('disclaimer').checked);
+    document.getElementById('topupBtn').disabled = !ok;
+  }
+
+  document.getElementById('disclaimer').addEventListener('change', updateBtn);
+
+  renderCurrencies();
+  renderMethods();
+  updateBtn();
+
+  function postJSON(url, data) {
+    return fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': getCookie('csrftoken')
+      },
+      body: JSON.stringify(data)
+    }).then(r => r.json());
+  }
+
+  document.getElementById('topupBtn').addEventListener('click', async () => {
+    if (!selectedCurrency || !selectedMethod) return;
+
+    try {
+      const resp = await postJSON('/api/topup/create/', {
+        currency: selectedCurrency,
+        method: selectedMethod,
+        disclaimer: document.getElementById('disclaimer').checked
+      });
+      if (resp.status && resp.redirect) {
+        window.location.href = resp.redirect;
+      } else {
+        alert(resp.error || 'Ошибка создания запроса');
+      }
+    } catch(e) {
+      alert('Ошибка сети');
+    }
+  });
+</script>
 {% endblock %}

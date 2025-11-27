@@ -1,0 +1,25 @@
+# docker-compose-victorialogs.yml
+version: '3.8'
+
+services:
+  victorialogs:
+    image: victoriametrics/victoria-logs:latest
+    container_name: victorialogs
+    ports:
+      - "9428:9428"  # HTTP API
+      - "3000:3000"  # Web UI
+    command:
+      - -storageDataPath=/victoria-logs-data
+      - -loggerLevel=INFO
+      - -memory.allowedPercent=50
+    volumes:
+      - victorialogs_data:/victoria-logs-data
+    networks:
+      - logs-network
+
+volumes:
+  victorialogs_data:
+
+networks:
+  logs-network:
+    driver: bridge

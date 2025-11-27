@@ -2,3 +2,14 @@ celery -A sitebuilder worker --loglevel=INFO --concurrency=4
 
 sudo systemctl restart celery
 sudo systemctl status celery
+
+
+# Создаем файл и запускаем
+docker-compose -f docker-compose-victorialogs.yml up -d
+
+# Проверяем
+docker ps
+
+
+#victorialogs
+http://localhost:9428/select/vmui

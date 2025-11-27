@@ -7,7 +7,7 @@ from ai.ai import ai_answer
 
 def charge(sub_site: SubSiteProject, ai_answer: ai_answer, description: str = None):
 
-    Transaction.objects.create(
+    return Transaction.objects.create(
         user=sub_site.site.user,
         amount_client=-ai_answer.price_for_client,
         amount_ai=-ai_answer.price_for_ai,
@@ -17,10 +17,12 @@ def charge(sub_site: SubSiteProject, ai_answer: ai_answer, description: str = No
     )
 
 def topup(user: User, amount: Decimal, description: str = None):
-    Transaction.objects.create(
+    return Transaction.objects.create(
         user=user,
-        amount=amount,
+        amount_client=amount,
+        amount_ai=0.0,
         type=Transaction.TYPE_TOPUP,
+        description=description,
     )
 
 def balance(user: User = None, site: SiteProject = None, sub_site: SubSiteProject = None) -> Decimal:

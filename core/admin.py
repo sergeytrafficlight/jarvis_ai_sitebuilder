@@ -56,6 +56,6 @@ class AIModelsSettingsAdmin(admin.ModelAdmin):
 
   @admin.register(PaymentGatewaySettings)
   class PaymentGatewaySettingsAdmin(admin.ModelAdmin):
-      list_display = ("type", "commission_extra")
+      list_display = ("enabled", "type", "method", "currency", "commission_extra")
       search_fields = []
       list_filter = []

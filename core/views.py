@@ -1,4 +1,7 @@
 import json
+from django.views.decorators.csrf import csrf_exempt
+from django.utils import timezone
+from datetime import timedelta
 from django.db.models import Count
 from django.shortcuts import get_object_or_404
 from collections import defaultdict
@@ -16,7 +19,6 @@ from django.views.decorators.http import require_POST
 from django.http import JsonResponse
 from sitebuilder.settings import USER_FILES_ROOT
 from core.tools import get_image_path_for_user, get_base_path_for_user, get_subsite_dir, generate_uniq_subsite_dir_for_site
-from django.utils import timezone
 from .models import Profile, Transaction, SiteProject, MyTask, SubSiteProject
 from django.http import FileResponse, Http404, HttpResponse
 from .models import Profile, Transaction, SiteProject
@@ -30,10 +32,12 @@ import requests
 from pathlib import Path
 from core.tools import get_subsite_dir
 from core.funds_balance import balance
-from django.utils import timezone
 from .models import ImageAIEdit, ImageAIEditConversation, SubSiteProject
 import os, io, zipfile
 from django.utils.text import slugify
+from .models import PaymentGatewaySettings, TopUpRequest
+import payment.types as payment_types
+
 
 
 
@@ -118,17 +122,20 @@ class TopupForm(forms.Form):
 
 @login_required
 def topup(request):
-    if request.method == "POST":
-        form = TopupForm(request.POST)
-        if form.is_valid():
-            amount = form.cleaned_data["amount"]
-            # Here we only redirect to a placeholder payment gateway page
-            return redirect(f"/payments/redirect/?amount={amount}")
-        else:
-            messages.error(request, _("Пожалуйста, исправьте ошибки в форме."))
-    else:
-        form = TopupForm()
-    return render(request, "topup.html", {"form": form})
+    # Подтянем доступные пары method/currency + комиссии
+    settings_qs = PaymentGatewaySettings.objects.all().values("method", "currency", "commission_extra")
+    settings_list = list(settings_qs)
+
+    # Сформируем уникальные валюты и сети
+    currencies = sorted({row["currency"] for row in settings_list})
+    methods = sorted({row["method"] for row in settings_list})
+
+    return render(request, "topup.html", {
+        "pgs": settings_list,
+        "currencies": currencies,
+        "methods": methods,
+    })
+
 
 
 @login_required
@@ -758,4 +765,109 @@ def site_rename(request, site_id: int):
 
 
 def payment_receive_topup(request, gateway: str, topup_request_id: int):
+    logger.debug(f"receive topup gw: {gateway}, topup_request_id: {topup_request_id}")
     pass
+
+@login_required
+def topup_requests(request):
+    threshold_time = timezone.now() + timedelta(minutes=30)
+    qs = TopUpRequest.objects.filter(
+        user=request.user,
+        status=TopUpRequest.STATUS_AWAITING,
+        expired_at__gte=threshold_time
+    ).order_by("-created_at")
+    # Параметры управления UI
+    open_id = request.GET.get("open")
+    msg = request.GET.get("msg")
+
+    return render(request, "topup_requests.html", {
+        "items": qs,
+        "open_id": open_id,
+        "message": msg,
+    })
+
+
+#@login_required
+@require_POST
+@csrf_exempt
+def topup_create(request):
+
+    print(f"topup create!!")
+    try:
+        data = json.loads(request.body or "{}")
+    except Exception:
+        return JsonResponse({"status": False, "error": "Invalid JSON"}, status=400)
+
+    currency = (data.get("currency") or "").strip()
+    method = (data.get("method") or "").strip()
+    disclaimer_ok = bool(data.get("disclaimer"))
+
+    if not currency or not method:
+        return JsonResponse({"status": False, "error": "Не выбраны валюта или сеть"}, status=400)
+    if not disclaimer_ok:
+        return JsonResponse({"status": False, "error": "Необходимо подтвердить условия"}, status=400)
+
+    # Валидация по PaymentGatewaySettings
+    pgs = PaymentGatewaySettings.objects.filter(currency=currency, method=method, enabled=True).order_by('?').first()
+    if not pgs:
+        return JsonResponse({"status": False, "error": "Недоступная комбинация валюты и сети"}, status=400)
+
+    # Если уже есть активные запросы в ожидании — отправим на страницу списка с сообщением
+    threshold_time = timezone.now() + timedelta(minutes=30)
+    exists = TopUpRequest.objects.filter(
+        user=request.user,
+        status=TopUpRequest.STATUS_AWAITING,
+        currency=currency,
+        method=method,
+        expired_at__gte=threshold_time,
+    ).exists()
+
+    if exists:
+        url = reverse("topup_requests")
+        url += "?msg=" + "Воспользуйтесь переводом на один из ранее созданных запросов"
+        return JsonResponse({"status": True, "redirect": url})
+
+    if pgs.type == payment_types.GATEWAY_CRYPTOGATOR:
+        import payment.cryptogator as payment_cryptogator
+        topup = payment_cryptogator.get_topup(request.user, pgs)
+    else:
+        raise Exception(f"Unknown payment type: {pgs.type}")
+
+
+    # Редирект на список активных запросов и открытие модалки
+    url = reverse("topup_requests") + f"?open={topup.id}"
+    return JsonResponse({"status": True, "redirect": url})
+
+
+@login_required
+def topup_request_status(request, request_id):
+    obj = get_object_or_404(TopUpRequest, id=request_id, user=request.user)
+
+
+    now = timezone.now()
+    expires_in = 0
+    if obj.expired_at:
+        expires_in = max(0, int((obj.expired_at - now).total_seconds()))
+
+    amount_received = None
+    if obj.topup_transaction_id:
+        amount_received = str(obj.topup_transaction.amount_client)
+
+    data = {
+        "status": True,
+        "item": {
+            "id": str(obj.id),
+            "status": obj.status,
+            "provider": obj.provider,
+            "method": obj.method,
+            "currency": obj.currency,
+            "wallet_to_pay_address": obj.wallet_to_pay_address or "",
+            "amount_min_for_order": str(obj.amount_min_for_order or ""),
+            "commission_extra": obj.payment_gateway_settings.commission_extra,
+            "created_at": timezone.localtime(obj.created_at).isoformat(),
+            "expired_at": timezone.localtime(obj.expired_at).isoformat() if obj.expired_at else None,
+            "expires_in": expires_in,
+            "amount_received": amount_received,
+        }
+    }
+    return JsonResponse(data)

@@ -21,10 +21,12 @@ DEBUG = cfg.DEBUG
 USER_FILES_ROOT = f"{BASE_DIR}/users"
 
 # Canonical host derived from config.SITE_URL
+
 _parsed = urlparse(getattr(config, "SITE_URL", "http://localhost:8000"))
 CANONICAL_SCHEME = _parsed.scheme or "http"
 CANONICAL_NETLOC = _parsed.netloc or "localhost:8000"
 CANONICAL_HOSTNAME = CANONICAL_NETLOC.split(":")[0]
+
 
 INSTALLED_APPS = [
     "django.contrib.admin",

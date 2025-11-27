@@ -1,0 +1,169 @@
+{% extends 'base.html' %}
+{% load i18n %}
+{% block title %}{% trans "Активные пополнения" %}{% endblock %}
+{% block content %}
+
+<h2>{% trans "Запросы на пополнение" %}</h2>
+
+{% if message %}
+  <div class="card" style="border-color: rgba(59,130,246,0.35); background: rgba(59,130,246,0.08);">
+    {{ message }}
+  </div>
+{% endif %}
+
+<div class="card">
+  {% if items %}
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Создан</th>
+          <th>Валюта</th>
+          <th>Сеть</th>
+          <th>Статус</th>
+          <th>Действие</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for it in items %}
+        <tr>
+          <td>{{ it.created_at|date:"d.m.Y H:i" }}</td>
+          <td>{{ it.currency }}</td>
+          <td>{{ it.method }}</td>
+          <td>{{ it.status }}</td>
+          <td>
+            <button class="btn btn-secondary js-open" data-id="{{ it.id }}">Открыть</button>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <div class="muted">Активных или прошлых запросов нет.</div>
+  {% endif %}
+</div>
+
+<!-- Модалка деталей запроса -->
+<div class="modal-overlay" id="topupModal" hidden>
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Детали пополнения</h3>
+      <button class="modal-close" data-close="#topupModal">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="topupError" class="muted" style="color:#fecaca; display:none;"></div>
+      <div style="display:grid; gap:8px;">
+        <div><strong>Метод:</strong> <span id="m_method"></span></div>
+        <div><strong>Валюта:</strong> <span id="m_currency"></span></div>
+        <div><strong>Адрес для перевода:</strong> <span id="m_address"></span></div>
+        <div><strong>Минимальная сумма:</strong> <span id="m_min"></span></div>
+        <div><strong>Комиссия шлюза:</strong> <span id="m_commission"></span></div>
+        <div><strong>Статус:</strong> <span id="m_status"></span></div>
+        <div><strong>Получено средств:</strong> <span id="m_received"></span></div>
+        <div><strong>Оставшееся время:</strong> <span id="m_timer"></span></div>
+        <div class="muted">Отправьте средства на указанные реквизиты. Будьте внимательны.</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" data-close="#topupModal">Закрыть</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const openId = "{{ open_id|default:'' }}";
+
+  function openModal() {
+    const m = document.getElementById('topupModal');
+    m.classList.add('active'); m.removeAttribute('hidden');
+  }
+  function closeModal() {
+    const m = document.getElementById('topupModal');
+    m.classList.remove('active'); m.setAttribute('hidden','');
+  }
+  document.body.addEventListener('click', (e) => {
+    const sel = e.target?.getAttribute('data-close');
+    if (sel) {
+      const m = document.querySelector(sel);
+      if (m) closeModal();
+    }
+  });
+
+  let pollTimer = null;
+  let timerTimer = null;
+  let currentId = null;
+  let leftSec = 0;
+
+  async function loadStatus(id) {
+    const r = await fetch(`/api/topup/${id}/status/`, { headers: {'X-Requested-With':'XMLHttpRequest'}});
+    return r.json();
+  }
+
+  function formatSeconds(s) {
+    s = Math.max(0, parseInt(s||0,10));
+    const m = Math.floor(s/60);
+    const ss = s%60;
+    return `${m}m ${ss}s`;
+  }
+
+  function startTimer(seconds) {
+    leftSec = seconds || 0;
+    const out = document.getElementById('m_timer');
+    if (timerTimer) clearInterval(timerTimer);
+    const tick = () => { out.textContent = formatSeconds(leftSec); leftSec = Math.max(0, leftSec-1); };
+    tick();
+    timerTimer = setInterval(tick, 1000);
+  }
+
+  async function showRequest(id) {
+    currentId = id;
+    document.getElementById('topupError').style.display = 'none';
+
+    const draw = (data) => {
+      const it = data.item;
+      document.getElementById('m_method').textContent = it.method || '';
+      document.getElementById('m_currency').textContent = it.currency || '';
+      document.getElementById('m_address').textContent = it.wallet_to_pay_address || '';
+      document.getElementById('m_min').textContent = it.amount_min_for_order || '';
+      document.getElementById('m_commission').textContent = (it.commission_extra ?? 0).toString();
+      document.getElementById('m_status').textContent = it.status || '';
+      document.getElementById('m_received').textContent = it.amount_received || '—';
+      startTimer(it.expires_in || 0);
+    };
+
+    try {
+      const data = await loadStatus(id);
+      if (!data.status) throw new Error('Ошибка');
+      draw(data);
+
+      if (pollTimer) clearInterval(pollTimer);
+      pollTimer = setInterval(async () => {
+        try {
+          const upd = await loadStatus(id);
+          if (!upd.status) return;
+          draw(upd);
+          // при завершении можно остановить поллинг
+          if (upd.item.status === 'done' || upd.item.expires_in === 0) {
+            clearInterval(pollTimer);
+          }
+        } catch(_) {}
+      }, 3000);
+
+      openModal();
+    } catch(e) {
+      document.getElementById('topupError').style.display = 'block';
+      document.getElementById('topupError').textContent = 'Не удалось получить детали запроса';
+      openModal();
+    }
+  }
+
+  // Клики по кнопкам
+  document.querySelectorAll('.js-open').forEach(b => {
+    b.addEventListener('click', () => showRequest(b.getAttribute('data-id')));
+  });
+
+  // Авто-открытие модалки по ?open=
+  if (openId) {
+    showRequest(openId);
+  }
+</script>
+{% endblock %}

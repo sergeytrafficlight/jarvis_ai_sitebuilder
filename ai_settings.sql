@@ -93,8 +93,12 @@ CREATE TABLE `core_paymentgatewaysettings` (
   `id` bigint(20) NOT NULL AUTO_INCREMENT,
   `type` varchar(20) NOT NULL,
   `commission_extra` double NOT NULL,
-  PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  `currency` varchar(20) NOT NULL,
+  `method` varchar(20) NOT NULL,
+  `enabled` tinyint(1) NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `core_paymentgatewaysettings_type_method_currency_e5651a15_uniq` (`type`,`method`,`currency`)
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -104,7 +108,8 @@ CREATE TABLE `core_paymentgatewaysettings` (
 LOCK TABLES `core_paymentgatewaysettings` WRITE;
 /*!40000 ALTER TABLE `core_paymentgatewaysettings` DISABLE KEYS */;
 INSERT INTO `core_paymentgatewaysettings` VALUES
-(1,'cryptogator',0.005);
+(1,'cryptogator',0.015,'USDT','Tron',1),
+(2,'cryptogator',0.015,'USDT','Ethereum',1);
 /*!40000 ALTER TABLE `core_paymentgatewaysettings` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
@@ -117,4 +122,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*M!100616 SET NOTE_VERBOSITY=@OLD_NOTE_VERBOSITY */;
 
--- Dump completed on 2025-11-26 19:04:58
+-- Dump completed on 2025-11-27 19:29:44

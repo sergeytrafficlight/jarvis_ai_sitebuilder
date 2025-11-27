@@ -45,4 +45,8 @@ urlpatterns = [
 
     path("api/payment/<str:gateway>/<uuid:topup_request_id>/topup/", views.payment_receive_topup, name="payment_receive_topup"),
 
+    path("topup/requests/", views.topup_requests, name="topup_requests"),
+    path("api/topup/create/", views.topup_create, name="topup_create"),
+    path("api/topup/<uuid:request_id>/status/", views.topup_request_status, name="topup_request_status"),
+
 ]

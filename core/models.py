@@ -109,13 +109,16 @@ class TopUpRequest(models.Model):
 
     user = models.ForeignKey(User, on_delete=models.PROTECT, related_name="topup_request")
     status = models.CharField(max_length=10, choices=STATUS_CHOICES)
-    provider = models.CharField(max_length=16, choices=PROVIDER_CHOICES)
-    method = models.CharField(max_length=10, choices=METHOD_CHOICES)
-    currency = models.CharField(max_length=10, choices=CURRENCY_CHOICES)
     wallet_to_pay_address = models.CharField(max_length=255, null=True)
     expired_at = models.DateTimeField(null=True)
     amount_min_for_order = models.DecimalField(max_digits=10, decimal_places=6, null=True)
     payment_gateway_transaction_id = models.CharField(max_length=256, null=True)
+    blockchain_trx_id = models.CharField(max_length=256, null=True)
+    topup_transaction = models.ForeignKey(Transaction, on_delete=models.PROTECT, related_name='topup_request', null=True)
+    payment_gateway_settings = models.ForeignKey('PaymentGatewaySettings', on_delete=models.PROTECT, related_name='topup_request')
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
 
 
 
@@ -307,7 +310,17 @@ class AIModelsSettings(models.Model):
 class PaymentGatewaySettings(models.Model):
 
     type = models.CharField(max_length=20, choices=payment_types.GATEWAY_CHOICES)
+    method = models.CharField(max_length=20, choices=TopUpRequest.METHOD_CHOICES)
+    currency = models.CharField(max_length=20, choices=TopUpRequest.CURRENCY_CHOICES)
+    enabled = models.BooleanField(default=True)
+
     commission_extra = models.FloatField()
+
+    class Meta:
+        unique_together = [
+            ("type", "method", "currency"),
+        ]
+
 
 
 class ImageAIEdit(models.Model):
