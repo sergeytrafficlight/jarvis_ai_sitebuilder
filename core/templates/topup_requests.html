@@ -27,8 +27,8 @@
       {% for it in items %}
         <tr>
           <td>{{ it.created_at|date:"d.m.Y H:i" }}</td>
-          <td>{{ it.currency }}</td>
-          <td>{{ it.method }}</td>
+          <td>{{ it.payment_gateway_settings.currency }}</td>
+          <td>{{ it.payment_gateway_settings.method }}</td>
           <td>{{ it.status }}</td>
           <td>
             <button class="btn btn-secondary js-open" data-id="{{ it.id }}">Открыть</button>

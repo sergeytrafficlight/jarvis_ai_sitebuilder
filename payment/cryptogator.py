@@ -11,7 +11,7 @@ from core.models import TopUpRequest, PaymentGatewaySettings
 from django.urls import reverse
 import payment.types as payment_types
 from config import PAYMENT_GATEWAY_CRYPTOGATOR_API_KEY, PAYMENT_GATEWAY_CRYPTOGATOR_SECRET_KEY, \
-    PAYMENT_GATEWAY_CRYPTOGATOR_BASE_URL, SITE_URL, DEBUG
+    PAYMENT_GATEWAY_CRYPTOGATOR_BASE_URL_ADAPTER, PAYMENT_GATEWAY_CRYPTOGATOR_BASE_URL_PARTNER, SITE_URL, DEBUG
 import core.funds_balance as funds_balance
 
 from core.log import *
@@ -74,7 +74,7 @@ def get_topup(user: User, pgs: PaymentGatewaySettings):
         "Content-Type": "application/json"
     }
 
-    url = f"{PAYMENT_GATEWAY_CRYPTOGATOR_BASE_URL}{http_function}"
+    url = f"{PAYMENT_GATEWAY_CRYPTOGATOR_BASE_URL_ADAPTER}{http_function}"
     response = requests.post(url, headers=headers, json=data)
     if response.status_code != 200:
         logger.error(f"response status: {response.status_code} | {response.text}")
@@ -125,6 +125,7 @@ def _commit_topup(topup_request: TopUpRequest, amount: Decimal, blockchain_trx_i
 
     topup_request.save()
 
+
 def webhook(post_data: str, topup_request_id: str):
 
     logger.debug(f"webhook topup id: {topup_request_id} post data: {str(post_data)}", payment_gateway=payment_types.GATEWAY_CRYPTOGATOR)
@@ -143,8 +144,8 @@ def webhook(post_data: str, topup_request_id: str):
     except Exception as e:
         raise Exception(f"{payment_types.GATEWAY_CRYPTOGATOR} wehook parsing error: {str(e)}")
 
-    if topup_request_id != external_id:
-        logger.error(f"webhook topup id: {topup_request_id} post data: {str(post_data)}"+
+    if str(topup_request_id) != str(external_id):
+        logger.error(f"webhook topup id: {topup_request_id} post data: {str(post_data)} "+
                      f"topup_request_id ({topup_request_id}) != external_id ({external_id})",
                      payment_gateway=payment_types.GATEWAY_CRYPTOGATOR,
                      payment_error='0x01',
@@ -202,7 +203,6 @@ def webhook(post_data: str, topup_request_id: str):
                          )
 
         raise Exception(f"error 0x05")
-
     _commit_topup(topup_request, amount, trx_id)
 
     return True
@@ -212,13 +212,15 @@ def recheck_topup_request(topup_request: TopUpRequest):
     date_from = (topup_request.created_at - timedelta(days=1)).strftime("%Y-%m-%d")
     date_to = (topup_request.created_at + timedelta(days=1)).strftime("%Y-%m-%d")
 
-    http_method = 'POST'
-    http_function = '/v1/platforms/unified-orders'
+    http_method = 'GET'
+    http_function = '/v2/platforms/unified-orders'
     timestamp = int(time.time())
     data = {
-        "startDate": f"{date_from}",
+        "fromDate": f"{date_from}",
         "endDate": f"{date_to}",
     }
+
+    print(data)
 
     headers = {
         "X-Api-Key": PAYMENT_GATEWAY_CRYPTOGATOR_API_KEY,
@@ -227,9 +229,9 @@ def recheck_topup_request(topup_request: TopUpRequest):
         "Content-Type": "application/json"
     }
 
-    url = f"{PAYMENT_GATEWAY_CRYPTOGATOR_BASE_URL}{http_function}"
+    url = f"{PAYMENT_GATEWAY_CRYPTOGATOR_BASE_URL_PARTNER}{http_function}"
     print(f"url: {url}")
-    response = requests.post(url, headers=headers, json=data)
+    response = requests.get(url, headers=headers, params=data, json=data)
     if response.status_code != 200:
         logger.error(f"status code: {response.status_code} | {response.text}")
         raise Exception(f"Repsonse code {response.status_code} ({payment_types.GATEWAY_CRYPTOGATOR}) {http_function}")

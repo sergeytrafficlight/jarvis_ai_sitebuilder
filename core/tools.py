@@ -291,3 +291,9 @@ def get_html_with_playwright_advanced(url, wait_for_selector=None, timeout=30000
         browser.close()
 
         return html_content
+
+
+def dir_copy(dir_from: str, dir_to:str):
+    if os.path.exists(dir_to):
+        shutil.rmtree(dir_to)
+    shutil.copytree(dir_from, dir_to)

@@ -1,7 +1,7 @@
 import uuid
 import random
 from django.test import TestCase
-from core.tests.tools import create_profile, create_gateways_settings, view_topup_create
+from core.tests.tools import create_profile, create_gateways_settings, view_topup_create, view_payment_receive_topup, view_topup_request_status
 from payment.cryptogator import get_topup, webhook, recheck_topup_request
 from core.models import TopUpRequest, PaymentGatewaySettings
 import payment.types as payment_types
@@ -43,9 +43,12 @@ class CryptogatorTest(TestCase):
             topup_request, msg = view_topup_create(p, pgs.currency, pgs.method)
             self.assertIsNotNone(topup_request, msg)
 
+            result, msg = view_topup_request_status(p, topup_request)
+            self.assertTrue(result, msg)
+
             topup_balance = random.randint(1, 10)
-            post_data = _make_moc_post_data(topup_request, topup_balance, 'DONE', uuid.uuid4().hex)
-            self.assertTrue(webhook(post_data, topup_request.id))
+
+            view_payment_receive_topup(p, topup_request, topup_balance, 'DONE', uuid.uuid4().hex)
 
             new_balance = p.get_balance()
 
@@ -55,7 +58,11 @@ class CryptogatorTest(TestCase):
     def test_topup_internal_flow_recheck(self):
 
         p = create_profile()
-        topup_request = get_topup(p.user, TopUpRequest.METHOD_TRON, TopUpRequest.CURRENCY_USDT)
+
+        pgs = PaymentGatewaySettings.objects.filter(type=payment_types.GATEWAY_CRYPTOGATOR).first()
+        topup_request, msg = view_topup_create(p, pgs.currency, pgs.method)
+        self.assertIsNotNone(topup_request, msg)
+
         recheck_topup_request(topup_request)
 
 

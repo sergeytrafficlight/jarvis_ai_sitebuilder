@@ -37,12 +37,7 @@ import os, io, zipfile
 from django.utils.text import slugify
 from .models import PaymentGatewaySettings, TopUpRequest
 import payment.types as payment_types
-
-
-
-
-
-
+import payment.cryptogator as payment_cryptogator
 from core.task_wrapper import task_generate_site_name_classification, task_generate_site, task_edit_image, task_edit_site
 
 from core.log import *
@@ -764,14 +759,28 @@ def site_rename(request, site_id: int):
   return JsonResponse({"status": True, "id": site.id, "name": site.name, "old_name": old_name})
 
 
+@require_POST
 def payment_receive_topup(request, gateway: str, topup_request_id: int):
     logger.debug(f"receive topup gw: {gateway}, topup_request_id: {topup_request_id}")
-    pass
+
+    try:
+        data = json.loads(request.body or "{}")
+    except Exception as e:
+        return HttpResponse(f"Error: {str(e)}", status=400)
+
+    try:
+        payment_cryptogator.webhook(data, topup_request_id)
+        return HttpResponse("OK", status=200)
+    except Exception as e:
+        logger.error(f"topup_request_id: {topup_request_id}, error: {str(e)} : post_data: {data}", payment_gateway=gateway)
+        return HttpResponse(f"Error: {str(e)}", status=400)
+
+
 
 @login_required
 def topup_requests(request):
     threshold_time = timezone.now() + timedelta(minutes=30)
-    qs = TopUpRequest.objects.filter(
+    qs = TopUpRequest.objects.select_related('payment_gateway_settings').filter(
         user=request.user,
         status=TopUpRequest.STATUS_AWAITING,
         expired_at__gte=threshold_time
@@ -787,12 +796,9 @@ def topup_requests(request):
     })
 
 
-#@login_required
+@login_required
 @require_POST
-@csrf_exempt
 def topup_create(request):
-
-    print(f"topup create!!")
     try:
         data = json.loads(request.body or "{}")
     except Exception:
@@ -817,8 +823,8 @@ def topup_create(request):
     exists = TopUpRequest.objects.filter(
         user=request.user,
         status=TopUpRequest.STATUS_AWAITING,
-        currency=currency,
-        method=method,
+        payment_gateway_settings__currency=currency,
+        payment_gateway_settings__method=method,
         expired_at__gte=threshold_time,
     ).exists()
 
@@ -828,7 +834,7 @@ def topup_create(request):
         return JsonResponse({"status": True, "redirect": url})
 
     if pgs.type == payment_types.GATEWAY_CRYPTOGATOR:
-        import payment.cryptogator as payment_cryptogator
+
         topup = payment_cryptogator.get_topup(request.user, pgs)
     else:
         raise Exception(f"Unknown payment type: {pgs.type}")
@@ -842,7 +848,6 @@ def topup_create(request):
 @login_required
 def topup_request_status(request, request_id):
     obj = get_object_or_404(TopUpRequest, id=request_id, user=request.user)
-
 
     now = timezone.now()
     expires_in = 0
@@ -858,9 +863,9 @@ def topup_request_status(request, request_id):
         "item": {
             "id": str(obj.id),
             "status": obj.status,
-            "provider": obj.provider,
-            "method": obj.method,
-            "currency": obj.currency,
+            "provider": obj.payment_gateway_settings.type,
+            "method": obj.payment_gateway_settings.method,
+            "currency": obj.payment_gateway_settings.currency,
             "wallet_to_pay_address": obj.wallet_to_pay_address or "",
             "amount_min_for_order": str(obj.amount_min_for_order or ""),
             "commission_extra": obj.payment_gateway_settings.commission_extra,

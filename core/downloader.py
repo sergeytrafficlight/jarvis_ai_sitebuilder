@@ -209,6 +209,17 @@ class Downloader:
 
             links_html.append(href)
 
+        for form_tag in soup.find_all('form'):
+            if not form_tag.get('action'):
+                continue
+            action = form_tag.get('action')
+            if not len(action):
+                continue
+            if action.startswith(('#', 'javascript:', 'mailto:', 'tel:')):
+                continue
+            links_html.append(action)
+
+
         for img_tag in soup.find_all('img'):
             if not img_tag.get('src'):
                 continue

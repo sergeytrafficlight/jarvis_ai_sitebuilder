@@ -5,7 +5,8 @@ from urllib.parse import urlparse, parse_qs
 from django.contrib.auth.models import User
 from django.test import Client, TestCase
 import payment.types as payment_types
-from core.models import PaymentGatewaySettings, Profile, get_profile, TopUpRequest
+from core.models import PaymentGatewaySettings, Profile, get_profile, TopUpRequest, SiteProject, SubSiteProject
+from core.tools import generate_uniq_subsite_dir_for_site
 import sitebuilder.settings
 
 
@@ -58,11 +59,6 @@ def view_topup_create(p: Profile, currency: str, method: str):
     )
     u.login_user()
 
-    print(f"User ID in session: {u.client.session.get('_auth_user_id')}")
-    print(f"User is authenticated: {u.user.is_authenticated}")
-    from django.conf import settings
-    print(f"LOGIN_URL: {settings.LOGIN_URL}")
-
 
     data = {}
     data['currency'] = currency
@@ -70,7 +66,7 @@ def view_topup_create(p: Profile, currency: str, method: str):
     data['disclaimer']  = 1
 
     url = reverse('topup_create', kwargs={})
-    print(f"URL: {url}")
+
     response = u.client.post(url,
                     data=json.dumps(data),
                     content_type='application/json',
@@ -96,3 +92,65 @@ def view_topup_create(p: Profile, currency: str, method: str):
         return None, f"Can't find topup with id: {topup_id}"
 
     return topup, f"Success"
+
+
+def view_payment_receive_topup(p:Profile, topup: TopUpRequest, amount:float, status: str, txId: str):
+    u = FakeUser(
+        p=p,
+    )
+    u.login_user()
+
+    data = {}
+    data['uuid'] = str(topup.payment_gateway_transaction_id)
+    data['amount'] = str(amount)
+    data['currency']  = topup.payment_gateway_settings.currency
+    data['status'] = status
+    data['txId'] = str(txId)
+    data['targetCurrency'] = topup.payment_gateway_settings.currency
+    data['externalId'] = str(topup.id)
+    data['customerId'] = str(topup.user.id)
+
+
+    url = reverse('payment_receive_topup', kwargs={'gateway': topup.payment_gateway_settings.type, 'topup_request_id': topup.id})
+    response = u.client.post(url,
+                    data=json.dumps(data),
+                    content_type='application/json',
+                )
+
+    return response.status_code == 200
+
+def view_topup_request_status(p: Profile, topup: TopUpRequest):
+    u = FakeUser(
+        p=p,
+    )
+    u.login_user()
+    url = reverse('topup_request_status', kwargs={'request_id': topup.id})
+    response = u.client.get(url)
+    if response.status_code != 200:
+        return False, f"Response status code: {response.status_code} <> 200"
+
+    return True, f"Success"
+
+
+def create_site_sub_site(p: Profile):
+
+    name = f"Site {get_uniq_id()}"
+    site = SiteProject.objects.create(
+        user=p.user,
+        name=name,
+        prompt='',
+        ref_site_url=None,
+    )
+
+    full_path, uniq_dir = generate_uniq_subsite_dir_for_site(site)
+
+    sub_site = SubSiteProject.objects.create(
+        site=site,
+        root_sub_site=None,
+        dir=uniq_dir,
+    )
+
+    return sub_site
+
+
+
