@@ -209,18 +209,19 @@ def webhook(post_data: str, topup_request_id: str):
 
 def recheck_topup_request(topup_request: TopUpRequest):
 
-    date_from = (topup_request.created_at - timedelta(days=1)).strftime("%Y-%m-%d")
-    date_to = (topup_request.created_at + timedelta(days=1)).strftime("%Y-%m-%d")
+    date_from = (topup_request.created_at - timedelta(days=1)).strftime("%Y-%m-%dT00:00:00")
+    date_to = (topup_request.created_at + timedelta(days=1)).strftime("%Y-%m-%dT23:59:59")
 
     http_method = 'GET'
     http_function = '/v2/platforms/unified-orders'
     timestamp = int(time.time())
     data = {
         "fromDate": f"{date_from}",
-        "endDate": f"{date_to}",
+        "toDate": f"{date_to}",
+        "itemsPerPage": "1000",
     }
 
-    print(data)
+    #print(data)
 
     headers = {
         "X-Api-Key": PAYMENT_GATEWAY_CRYPTOGATOR_API_KEY,
@@ -230,24 +231,42 @@ def recheck_topup_request(topup_request: TopUpRequest):
     }
 
     url = f"{PAYMENT_GATEWAY_CRYPTOGATOR_BASE_URL_PARTNER}{http_function}"
-    print(f"url: {url}")
+    #print(f"url: {url}")
     response = requests.get(url, headers=headers, params=data, json=data)
     if response.status_code != 200:
         logger.error(f"status code: {response.status_code} | {response.text}")
         raise Exception(f"Repsonse code {response.status_code} ({payment_types.GATEWAY_CRYPTOGATOR}) {http_function}")
 
     try:
-
         data = json.loads(response.text)
-        print(data)
+        content = data['content']
+        for item in content:
+            uuid = item.get('uuid')
+            amount = item.get('receivedAmount')
+            if amount is None:
+                continue
+            amount = Decimal(amount)
+
+            currency = item.get("currency")
+            status = item.get('status')
+
+            if topup_request.payment_gateway_settings__currency != currency:
+                continue
+
+            if topup_request.payment_gateway_transaction_id != uuid:
+                continue
+
+            if status == 'DONE':
+                _commit_topup(topup_request, amount, '--')
+                return topup_request
+
 
     except ValueError as e:
         logger.error(f"Can't parse json {str(e)}")
         raise Exception(f"{payment_types.GATEWAY_CRYPTOGATOR} JSON error {str(e)}")
 
 
-
-
+    return topup_request
 
 
 

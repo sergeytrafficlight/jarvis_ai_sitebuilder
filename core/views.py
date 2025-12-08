@@ -849,10 +849,19 @@ def topup_create(request):
 def topup_request_status(request, request_id):
     obj = get_object_or_404(TopUpRequest, id=request_id, user=request.user)
 
+    if obj.status == TopUpRequest.STATUS_AWAITING:
+        obj = payment_cryptogator.recheck_topup_request(obj)
+
+
     now = timezone.now()
     expires_in = 0
     if obj.expired_at:
         expires_in = max(0, int((obj.expired_at - now).total_seconds()))
+
+    if obj.status != TopUpRequest.STATUS_AWAITING:
+        expires_in = None
+        obj.wallet_to_pay_address = None
+
 
     amount_received = None
     if obj.topup_transaction_id:

@@ -8,7 +8,7 @@ from pathlib import Path
 from django.test import TestCase
 from core.tests.tools import create_profile, create_site_sub_site
 from core.tools import get_subsite_dir, dir_copy, generate_uniq_subsite_dir_for_site
-from core.downloader import Downloader
+from core.downloader import Downloader, Downloader2
 
 test_data_dir_site = 'test_data/test_site/'
 test_data_dir_to_download = 'test_data/test_site_download/'
@@ -37,7 +37,7 @@ class SiteDownloaderTest(TestCase):
             if os.path.exists(test_data_dir_to_download):
                 shutil.rmtree(test_data_dir_to_download)
 
-            d = Downloader(base_url, test_data_dir_to_download)
+            d = Downloader2(base_url, test_data_dir_to_download)
             d.download()
 
         finally:

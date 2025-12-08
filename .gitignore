@@ -4,4 +4,4 @@ __pycache__/
 users/
 static/
 test_dir/
-test_data/
+test_data/test_site_download/

@@ -1,5 +1,6 @@
 import os
 import re
+import threading
 from urllib.parse import urljoin, urlparse, urlunparse
 from bs4 import BeautifulSoup
 from playwright.sync_api import sync_playwright
@@ -7,131 +8,6 @@ from core.tools import is_valid_http_url
 from core.log import *
 
 logger.setLevel(logging.DEBUG)
-
-
-def download_site2(start_url, max_depth: int, download_dir: str):
-    """
-    Упрощенная версия для скачивания сайта с относительными путями
-    """
-
-    visited = set()
-    base_domain = urlparse(start_url).netloc
-
-    def get_page_content(url):
-        logger.debug(f"url: {url}")
-        with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
-            context = browser.new_context()
-            page = context.new_page()
-
-            try:
-                page.goto(url, wait_until='networkidle')
-                # Скролл для активации ленивой загрузки
-                page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-                content = page.content()
-                logger.debug(f"done")
-                return content
-            except Exception as e:
-                logger.error(f"Error loading {url}: {e}")
-                return None
-            finally:
-                browser.close()
-
-    def save_processed_page(url, html):
-        """Сохраняет страницу с относительными путями"""
-        parsed_url = urlparse(url)
-        path = parsed_url.path
-
-        logger.debug(f"parsed_url: {parsed_url} path: {path}")
-
-        # Определяем путь к файлу
-        if not path or path == "/":
-            file_path = os.path.join(download_dir, "index.html")
-        else:
-            if path.startswith("/"):
-                path = path[1:]
-            if path.endswith("/"):
-                path += "index.html"
-            elif "." not in os.path.basename(path):
-                path += "/index.html"
-            file_path = os.path.join(download_dir, path)
-
-        # Создаем директории
-        os.makedirs(os.path.dirname(file_path), exist_ok=True)
-
-        # Конвертируем URLs в относительные пути
-        def make_relative(match):
-            tag, attr, original_url = match.groups()
-            full_url = urljoin(url, original_url)
-
-            if urlparse(full_url).netloc == base_domain:
-                # Вычисляем относительный путь
-                current_dir = os.path.dirname(parsed_url.path) or "."
-                target_path = urlparse(full_url).path or "index.html"
-
-                # Простая логика для относительных путей
-                if current_dir == ".":
-                    relative_path = target_path.lstrip("/")
-                else:
-                    relative_path = os.path.relpath(target_path, current_dir)
-
-                return f'{tag} {attr}="{relative_path}"'
-            return match.group(0)
-
-        # Регулярное выражение для поиска URL в тегах
-        pattern = r'<(a|link|script|img|source)\s+[^>]*(href|src)=["\']([^"\']*)["\'][^>]*>'
-        processed_html = re.sub(pattern, make_relative, html, flags=re.IGNORECASE)
-
-        # Сохраняем файл
-        with open(file_path, 'w', encoding='utf-8') as f:
-            f.write(processed_html)
-
-        print(f"✓ Saved: {file_path}")
-        return processed_html
-
-    def extract_links(html, base_url):
-        """Извлекает ссылки из HTML"""
-        links = []
-        pattern = r'<a\s+[^>]*href=["\']([^"\']*)["\'][^>]*>'
-
-        for match in re.finditer(pattern, html, re.IGNORECASE):
-            href = match.group(1)
-            if not href.startswith(('javascript:', 'mailto:', 'tel:', '#')):
-                full_url = urljoin(base_url, href)
-                if urlparse(full_url).netloc == base_domain:
-                    links.append(full_url)
-
-        return links
-
-    def crawl(url, depth=0):
-        if depth > max_depth or url in visited:
-            return
-
-        logger.debug(f"[Depth {depth}] Processing: {url}")
-        visited.add(url)
-
-
-
-        html = get_page_content(url)
-        if not html:
-            return
-
-        # Сохраняем и обрабатываем страницу
-        processed_html = save_processed_page(url, html)
-
-        # Рекурсивно обходим ссылки
-        if depth < max_depth:
-            links = extract_links(processed_html, url)
-            for link in links:
-                if link not in visited:
-                    crawl(link, depth + 1)
-
-    # Запускаем
-    logger.debug(f"url: {start_url}  -> {download_dir}")
-    os.makedirs(download_dir, exist_ok=True)
-    crawl(start_url)
-    logger.debug(f"Download completed! Total pages: {len(visited)}")
-
 
 
 def _clean_url(url):
@@ -146,6 +22,13 @@ def _get_domain(url):
     parsed = urlparse(url)
     return parsed.netloc
 
+def _get_web_dir(url: str):
+    parsed = urlparse(url)
+    path = parsed.path
+    directory = os.path.dirname(path)
+    return urlunparse((parsed.scheme, parsed.netloc, directory, '', '', ''))
+
+
 def _is_internal_link(link, my_domain):
     if not link.startswith(('http://', 'https://')):
         return True
@@ -156,25 +39,13 @@ def _is_internal_link(link, my_domain):
         return False
 
 def _compose_full_link(link, current_path):
-    if link.startswith(('http://', 'https://')):
-        return link
-    if link.startswith('./'):
-        link = link[2:]
-    elif link.startswith('/'):
-        link = link[1:]
-    if not len(link):
-        return current_path
-    if current_path.endswith('/'):
-        path = current_path + link
-    else:
-        path = f"{current_path}/{link}"
-    return path
+    return urljoin(current_path, link)
 
 
 class Downloader:
 
 
-    def __init__(self, url: str, download_dir: str, max_depth : int = 5):
+    def __init__(self, url: str, download_dir: str, max_depth : int = 5, max_threads: int = 5):
 
         if not is_valid_http_url(url):
             raise Exception(f"Invalid url: {url}")
@@ -185,6 +56,7 @@ class Downloader:
 
         self.dir = download_dir
         self.max_depth = max_depth
+        self.max_threads = max_threads
 
         self.visited_url = set()
 
@@ -319,4 +191,138 @@ class Downloader:
         logger.debug(f"imgs: {len(self.to_download_img)}")
         logger.debug(f"js_css: {len(self.to_download_js_css)}")
 
+
+def _get_target_name(base_web_dir: str, url: str) -> str:
+    """
+    Продвинутая версия с обработкой различных случаев
+
+    Args:
+        base_web_dir: Базовый URL директории
+        url: Полный URL
+
+    Returns:
+        Относительный путь от base_web_dir к url
+    """
+    # Нормализуем URL: убираем фрагменты, параметры запроса
+    base_parsed = urlparse(base_web_dir)
+    url_parsed = urlparse(url)
+
+    # Собираем нормализованные URL без query и fragment
+    base_normalized = f"{base_parsed.scheme}://{base_parsed.netloc}{base_parsed.path}"
+    url_normalized = f"{url_parsed.scheme}://{url_parsed.netloc}{url_parsed.path}"
+
+    # Добавляем завершающий слеш к base_normalized если это не файл
+    if '.' not in base_normalized.split('/')[-1] and not base_normalized.endswith('/'):
+        base_normalized += '/'
+
+    # Проверяем, является ли base_normalized префиксом url_normalized
+    if url_normalized.startswith(base_normalized):
+        # Вырезаем префикс
+        relative_part = url_normalized[len(base_normalized):]
+        # Преобразуем в путь
+        if not relative_part:
+            return '/'
+        # Убеждаемся, что путь начинается со слеша
+        return '/' + relative_part if not relative_part.startswith('/') else relative_part
+    else:
+        # Возвращаем полный путь из URL
+        return url_parsed.path or '/'
+
+class URL4Download:
+
+    STATUS_NEW = 'NEW'
+    STATUS_PROCESSING = 'PROCESSING'
+    STATUS_DONE = 'DONE'
+
+    def __init__(self, base_web_dir: str, url: str):
+        self.url = _clean_url(url)
+        self.base_web_dir = base_web_dir
+        self.target_name = _get_target_name(self.base_web_dir, self.url)
+        if self.target_name.endswith('/'):
+            self.target_name += 'index.html'
+        self.status = URL4Download.STATUS_NEW
+
+    def __str__(self):
+        return self.target_name
+
+    def info(self):
+        return f"bwd [{self.base_web_dir}] url [{self.url}] tn [{self.target_name}]"
+
+class Downloader2:
+
+    def __init__(self, url: str, download_dir: str, max_depth : int = 5, max_threads: int = 5):
+
+        if not is_valid_http_url(url):
+            raise Exception(f"Invalid url: {url}")
+
+        self.url = url
+        self.url_cleaned = _clean_url(url)
+        self.my_domain = _get_domain(url)
+        self.base_web_dir = _get_web_dir(url)
+
+        self.dir = download_dir
+        self.max_depth = max_depth
+        self.max_threads = max_threads
+
+        self.urls4download = set()
+        self.urls4download_lock = threading.Lock()
+        self.urls2download_new_urls_found = threading.Event()
+
+
+
+    def get_url(self):
+        while True:
+            done_count = 0
+            with self.urls4download_lock:
+                for url in self.urls4download:
+                    if url.status == URL4Download.STATUS_DONE:
+                        done_count += 1
+                    if url.status != URL4Download.STATUS_NEW:
+                        continue
+                    url.status = URL4Download.STATUS_PROCESSING
+                    return url
+
+
+                if done_count == len(self.urls4download):
+                    return None
+
+                self.urls4download_lock.release()
+                self.urls2download_new_urls_found.wait(timeout=1)
+                self.urls2download_new_urls_found.clear()
+                self.urls4download_lock.acquire()
+                continue
+
+    def url_finished(self, url):
+        with self.urls4download_lock:
+            url.status = url.status = URL4Download.STATUS_DONE
+
+    def download_thread(self):
+        thread_id = threading.get_ident()
+
+        while True:
+            url = self.get_url()
+
+            if url is None:
+                print(f"tid: {thread_id} url is None")
+                return None
+
+            print(f"proceed tid: {thread_id} url {url.info()}")
+
+
+            self.url_finished(url)
+
+
+    def download(self):
+        os.makedirs(self.dir, exist_ok=True)
+
+        self.urls4download.add(URL4Download(self.base_web_dir, self.url))
+
+        threads = []
+        for i in range(self.max_threads):
+            t = threading.Thread(target=self.download_thread)
+            t.start()
+            threads.append(t)
+
+        for t in threads:
+            t.join()
 

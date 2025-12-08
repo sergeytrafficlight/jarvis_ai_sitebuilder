@@ -20,6 +20,7 @@
           <th>Валюта</th>
           <th>Сеть</th>
           <th>Статус</th>
+          <th>Получено</th>
           <th>Действие</th>
         </tr>
       </thead>
@@ -30,6 +31,8 @@
           <td>{{ it.payment_gateway_settings.currency }}</td>
           <td>{{ it.payment_gateway_settings.method }}</td>
           <td>{{ it.status }}</td>
+          <td>{{it.amount_received}} </td>
+
           <td>
             <button class="btn btn-secondary js-open" data-id="{{ it.id }}">Открыть</button>
           </td>

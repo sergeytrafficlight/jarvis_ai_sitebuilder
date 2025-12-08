@@ -63,7 +63,10 @@ class CryptogatorTest(TestCase):
         topup_request, msg = view_topup_create(p, pgs.currency, pgs.method)
         self.assertIsNotNone(topup_request, msg)
 
-        recheck_topup_request(topup_request)
+        result = recheck_topup_request(topup_request)
+
+        self.assertIsNone(result)
+
 
 
 
