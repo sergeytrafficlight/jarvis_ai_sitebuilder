@@ -1,9 +1,13 @@
 import os
 import re
 import threading
+import requests
 from urllib.parse import urljoin, urlparse, urlunparse
+import urllib.parse
 from bs4 import BeautifulSoup
 from playwright.sync_api import sync_playwright
+
+from core.models import TYPE_CHOICES
 from core.tools import is_valid_http_url
 from core.log import *
 
@@ -26,7 +30,10 @@ def _get_web_dir(url: str):
     parsed = urlparse(url)
     path = parsed.path
     directory = os.path.dirname(path)
-    return urlunparse((parsed.scheme, parsed.netloc, directory, '', '', ''))
+    result = urlunparse((parsed.scheme, parsed.netloc, directory, '', '', ''))
+    if not result.endswith('/'):
+        result += '/'
+    return result
 
 
 def _is_internal_link(link, my_domain):
@@ -191,6 +198,82 @@ class Downloader:
         logger.debug(f"imgs: {len(self.to_download_img)}")
         logger.debug(f"js_css: {len(self.to_download_js_css)}")
 
+class URL4Download:
+
+    STATUS_NEW = 'NEW'
+    STATUS_PROCESSING = 'PROCESSING'
+    STATUS_DONE = 'DONE'
+
+    STATUS_CHOICES = (
+        (STATUS_NEW, STATUS_NEW),
+        (STATUS_PROCESSING, STATUS_PROCESSING),
+        (STATUS_DONE, STATUS_DONE),
+    )
+
+    TYPE_HTML = 'HTML'
+    TYPE_CSS_JS = 'CSS_JS'
+    TYPE_IMG = 'IMG'
+
+    TYPE_CHOICES = (
+        (TYPE_HTML, TYPE_HTML),
+        (TYPE_CSS_JS, TYPE_CSS_JS),
+        (TYPE_IMG, TYPE_IMG),
+    )
+
+    def __init__(self, downloader: 'Downloader2',  url: str, type: str):
+        self.downloader = downloader
+        self.url = _clean_url(url)
+
+        self.full_url = self.get_full_url()
+
+        self.target_name = _get_target_name(self.downloader.base_web_dir, self.url)
+        if self.target_name.endswith('/'):
+            self.target_name += 'index.html'
+
+        self.status = URL4Download.STATUS_NEW
+
+        assert type in dict(URL4Download.TYPE_CHOICES), f"Wrong type [{type}] [{dict(URL4Download.TYPE_CHOICES)}]"
+        self.type = type
+
+        self.error = ''
+
+        self.target_path = self.get_target_path()
+
+    def get_target_path(self):
+        base_dir = os.path.normpath(self.downloader.dir)
+
+        #print(f"URL: {str(url.info())}")
+        if self.target_name.startswith('./'):
+            url_path = self.target_name[2:]
+        else:
+            url_path = self.target_name
+
+        #print(f"url path: {url_path}")
+
+        url_path = url_path.strip('/')
+        full_path = os.path.join(base_dir, url_path)
+        full_path = os.path.normpath(full_path)
+        return full_path
+
+    def get_full_url(self):
+        if urllib.parse.urlparse(self.url).scheme:
+            return self.url
+        full_url = urllib.parse.urljoin(self.downloader.base_web_dir, self.url)
+        return full_url
+
+    def __str__(self):
+        return self.target_path
+
+    def __hash__(self):
+        return hash(self.target_path)
+
+    def __eq__(self, other):
+        if not isinstance(other, URL4Download):
+            return False
+        return self.target_path == other.target_path
+
+    def info(self):
+        return f"bwd [{self.downloader.base_web_dir}] url [{self.url}] tp [{self.target_path}] f.url [{self.full_url}]"
 
 def _get_target_name(base_web_dir: str, url: str) -> str:
     """
@@ -228,29 +311,67 @@ def _get_target_name(base_web_dir: str, url: str) -> str:
         # Возвращаем полный путь из URL
         return url_parsed.path or '/'
 
-class URL4Download:
 
-    STATUS_NEW = 'NEW'
-    STATUS_PROCESSING = 'PROCESSING'
-    STATUS_DONE = 'DONE'
+def _extract_links(downloader: 'Downloader2', content: str):
+    soup = BeautifulSoup(content, 'html.parser')
 
-    def __init__(self, base_web_dir: str, url: str):
-        self.url = _clean_url(url)
-        self.base_web_dir = base_web_dir
-        self.target_name = _get_target_name(self.base_web_dir, self.url)
-        if self.target_name.endswith('/'):
-            self.target_name += 'index.html'
-        self.status = URL4Download.STATUS_NEW
+    links_html = []
+    links_css_js = []
+    links_imgs = []
 
-    def __str__(self):
-        return self.target_name
+    for a_tag in soup.find_all('a'):
+        if not a_tag.get('href'):
+            continue
+        href = a_tag['href'].strip()
+        if not len(href):
+            continue
+        if href.startswith(('#', 'javascript:', 'mailto:', 'tel:')):
+            continue
 
-    def info(self):
-        return f"bwd [{self.base_web_dir}] url [{self.url}] tn [{self.target_name}]"
+        links_html.append(URL4Download(downloader, href, URL4Download.TYPE_HTML))
+
+    for form_tag in soup.find_all('form'):
+        if not form_tag.get('action'):
+            continue
+        action = form_tag.get('action')
+        if not len(action):
+            continue
+        if action.startswith(('#', 'javascript:', 'mailto:', 'tel:')):
+            continue
+        links_html.append(URL4Download(downloader, action, URL4Download.TYPE_HTML))
+
+
+    for img_tag in soup.find_all('img'):
+        if not img_tag.get('src'):
+            continue
+        src = img_tag['src'].strip()
+        if not len(src):
+            continue
+        links_imgs.append(URL4Download(downloader, src, URL4Download.TYPE_IMG))
+
+    for script_tag in soup.find_all('script'):
+        if not script_tag.get('src'):
+            continue
+        src = script_tag['src'].strip()
+        if not len(src):
+            continue
+        links_css_js.append(URL4Download(downloader, src, URL4Download.TYPE_CSS_JS))
+
+    for css_tag in soup.find_all('link'):
+        if not css_tag.get('href'):
+            continue
+        href = css_tag['href'].strip()
+        if not len(href):
+            continue
+
+        links_css_js.append(URL4Download(downloader, href, URL4Download.TYPE_CSS_JS))
+
+
+    return content, links_html + links_css_js + links_imgs
 
 class Downloader2:
 
-    def __init__(self, url: str, download_dir: str, max_depth : int = 5, max_threads: int = 5):
+    def __init__(self, url: str, download_dir: str, max_depth : int = 5, max_threads: int = 5, timeout_per_url: int = 10):
 
         if not is_valid_http_url(url):
             raise Exception(f"Invalid url: {url}")
@@ -268,6 +389,7 @@ class Downloader2:
         self.urls4download_lock = threading.Lock()
         self.urls2download_new_urls_found = threading.Event()
 
+        self.timeout_per_url = timeout_per_url
 
 
     def get_url(self):
@@ -292,9 +414,59 @@ class Downloader2:
                 self.urls4download_lock.acquire()
                 continue
 
-    def url_finished(self, url):
+    def url_finished(self, url: URL4Download, error: str = ''):
         with self.urls4download_lock:
             url.status = url.status = URL4Download.STATUS_DONE
+            url.error = error
+
+    def download_url_html(self, url):
+        content = None
+        with sync_playwright() as p:
+            try:
+                browser = p.chromium.launch(headless=True)
+                context = browser.new_context()
+                page = context.new_page()
+
+                page.goto(url.full_url, wait_until='networkidle')
+                page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+                content = page.content()
+            finally:
+                browser.close()
+
+        return content
+
+    def download_url_common(self, url):
+        """Загружает контент и определяет его тип"""
+        response = requests.get(
+            url.full_url,
+            timeout=self.timeout_per_url,
+            headers={
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            }
+        )
+        response.raise_for_status()
+
+        # Определяем Content-Type
+        content_type = response.headers.get('Content-Type', '').lower()
+
+        # Если это изображение или другой бинарный тип
+        if any(binary_type in content_type for binary_type in [
+            'image/', 'font/', 'application/octet-stream',
+            'application/pdf', 'video/', 'audio/'
+        ]):
+            return response.content  # bytes
+        else:
+            # Пробуем получить как текст с правильной кодировкой
+            if response.encoding:
+                return response.text
+            else:
+                # Если кодировка не определена, пробуем декодировать
+                try:
+                    return response.content.decode('utf-8')
+                except UnicodeDecodeError:
+                    # Если не получается, возвращаем как bytes
+                    return response.content
+
 
     def download_thread(self):
         thread_id = threading.get_ident()
@@ -303,11 +475,58 @@ class Downloader2:
             url = self.get_url()
 
             if url is None:
-                print(f"tid: {thread_id} url is None")
+                logger.debug(f"tid: {thread_id} url is None")
                 return None
 
-            print(f"proceed tid: {thread_id} url {url.info()}")
+            logger.debug(f"proceed tid: {thread_id} url {url.info()}")
 
+
+            if url.type == URL4Download.TYPE_HTML:
+                try:
+                    content = self.download_url_html(url)
+                    logger.debug(f"done")
+                except Exception as e:
+                    logger.error(f"Error loading {url}: {e}")
+                    self.url_finished(url, f"Error loading {url}: {e}")
+                    continue
+
+                logger.debug(f"Content len {len(content)}")
+
+                new_content, links = _extract_links(self, content)
+
+                for link in links:
+                    self.urls4download.add(link)
+
+            elif url.type in [URL4Download.TYPE_CSS_JS, URL4Download.TYPE_IMG]:
+
+                try:
+                    content = self.download_url_common(url)
+                except Exception as e:
+                    logger.error(f"Error loading {url}: {e}")
+                    self.url_finished(url, f"Error loading {url}: {e}")
+                    continue
+
+
+
+            else:
+                raise Exception(f"Unknown url type: {url.type}: {url.info()}")
+
+
+            try:
+                logger.debug(f'save {len(content)} to {self.dir} | {url.target_name} -> {url.target_path}')
+                directory = os.path.dirname(url.target_path)
+                os.makedirs(directory, exist_ok=True)
+
+                mode = 'wb' if isinstance(content, bytes) else 'w'
+                encoding = None if isinstance(content, bytes) else 'utf-8'
+
+                with open(url.target_path, mode, encoding=encoding) as f:
+                    f.write(content)
+
+            except Exception as e:
+                logger.error(f"Error write {url}: {e} to: {url.target_path}")
+                self.url_finished(url, f"Error write {url}: {e} to: {url.target_path}")
+                continue
 
             self.url_finished(url)
 
@@ -315,7 +534,7 @@ class Downloader2:
     def download(self):
         os.makedirs(self.dir, exist_ok=True)
 
-        self.urls4download.add(URL4Download(self.base_web_dir, self.url))
+        self.urls4download.add(URL4Download(self, self.url, URL4Download.TYPE_HTML))
 
         threads = []
         for i in range(self.max_threads):
