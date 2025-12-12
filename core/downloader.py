@@ -2,6 +2,7 @@ import os
 import re
 import threading
 import requests
+from pathlib import Path
 from urllib.parse import urljoin, urlparse, urlunparse
 import urllib.parse
 from bs4 import BeautifulSoup
@@ -12,6 +13,32 @@ from core.tools import is_valid_http_url
 from core.log import *
 
 logger.setLevel(logging.DEBUG)
+
+
+class SafePathResolver:
+
+    def __init__(self, base_dir: str):
+        self.base_dir = Path(base_dir).resolve()
+
+    def safe_path(self, relative_path: str) -> Path:
+        clean_path = os.path.normpath(relative_path)
+        clean_path = clean_path.strip('/').lstrip('\\')
+        if clean_path.startswith('..') or clean_path == '..':
+            raise Exception(f'Path traversal attempt detected: {relative_path}')
+        full_path = self.base_dir / clean_path
+        try:
+            if os.path.commonpath([self.base_dir, full_path]) != str(self.base_dir):
+                raise Exception(f"Path escapes download directory: {relative_path}")
+        except ValueError:
+            raise Exception(f"Invalid path: {relative_path}")
+
+        return full_path
+
+    def ensure_safe_directory(self, relative_path: str) -> Path:
+        safe_path = self.safe_path(relative_path)
+        safe_path.mkdir(parents=True, exist_ok=True)
+        return safe_path
+
 
 
 def _clean_url(url):
@@ -221,26 +248,35 @@ class URL4Download:
     )
 
     def __init__(self, downloader: 'Downloader2',  url: str, type: str):
+        assert type in dict(URL4Download.TYPE_CHOICES), f"Wrong type [{type}] [{dict(URL4Download.TYPE_CHOICES)}]"
+        self.type = type
+        self.error = ''
+        self.status = URL4Download.STATUS_NEW
         self.downloader = downloader
+
         self.url = _clean_url(url)
 
         self.full_url = self.get_full_url()
 
         self.target_name = _get_target_name(self.downloader.base_web_dir, self.url)
+
         if self.target_name.endswith('/'):
             self.target_name += 'index.html'
 
-        self.status = URL4Download.STATUS_NEW
 
-        assert type in dict(URL4Download.TYPE_CHOICES), f"Wrong type [{type}] [{dict(URL4Download.TYPE_CHOICES)}]"
-        self.type = type
-
-        self.error = ''
 
         self.target_path = self.get_target_path()
 
     def get_target_path(self):
-        base_dir = os.path.normpath(self.downloader.dir)
+        try:
+            base_dir = os.path.normpath(self.downloader.dir)
+            r = SafePathResolver(base_dir)
+            return r.safe_path(self.target_name)
+        except Exception as e:
+            self.error = str(e)
+            self.status = URL4Download.STATUS_DONE
+            return None
+
 
         #print(f"URL: {str(url.info())}")
         if self.target_name.startswith('./'):
@@ -273,7 +309,7 @@ class URL4Download:
         return self.target_path == other.target_path
 
     def info(self):
-        return f"bwd [{self.downloader.base_web_dir}] url [{self.url}] tp [{self.target_path}] f.url [{self.full_url}]"
+        return f"bwd [{self.downloader.base_web_dir}] url [{self.url}] tn [{self.target_name}] tp [{self.target_path}] f.url [{self.full_url}]"
 
 def _get_target_name(base_web_dir: str, url: str) -> str:
     """
@@ -327,8 +363,14 @@ def _extract_links(downloader: 'Downloader2', content: str):
             continue
         if href.startswith(('#', 'javascript:', 'mailto:', 'tel:')):
             continue
+        if not _is_internal_link(href, downloader.my_domain):
+            continue
 
-        links_html.append(URL4Download(downloader, href, URL4Download.TYPE_HTML))
+        url = URL4Download(downloader, href, URL4Download.TYPE_HTML)
+        links_html.append(url)
+        a_tag['href'] = url.target_name
+
+
 
     for form_tag in soup.find_all('form'):
         if not form_tag.get('action'):
@@ -338,7 +380,13 @@ def _extract_links(downloader: 'Downloader2', content: str):
             continue
         if action.startswith(('#', 'javascript:', 'mailto:', 'tel:')):
             continue
-        links_html.append(URL4Download(downloader, action, URL4Download.TYPE_HTML))
+        if not _is_internal_link(action, downloader.my_domain):
+            continue
+
+
+        url = URL4Download(downloader, action, URL4Download.TYPE_HTML)
+        links_html.append(url)
+        form_tag['action'] = url.target_name
 
 
     for img_tag in soup.find_all('img'):
@@ -347,7 +395,13 @@ def _extract_links(downloader: 'Downloader2', content: str):
         src = img_tag['src'].strip()
         if not len(src):
             continue
-        links_imgs.append(URL4Download(downloader, src, URL4Download.TYPE_IMG))
+        if not _is_internal_link(src, downloader.my_domain):
+            continue
+
+        url = URL4Download(downloader, src, URL4Download.TYPE_IMG)
+        links_imgs.append(url)
+        img_tag['src'] = url.target_name
+
 
     for script_tag in soup.find_all('script'):
         if not script_tag.get('src'):
@@ -355,7 +409,13 @@ def _extract_links(downloader: 'Downloader2', content: str):
         src = script_tag['src'].strip()
         if not len(src):
             continue
-        links_css_js.append(URL4Download(downloader, src, URL4Download.TYPE_CSS_JS))
+        if not _is_internal_link(src, downloader.my_domain):
+            continue
+
+        url = URL4Download(downloader, src, URL4Download.TYPE_CSS_JS)
+        links_css_js.append(url)
+        script_tag['src'] = url.target_name
+
 
     for css_tag in soup.find_all('link'):
         if not css_tag.get('href'):
@@ -363,11 +423,16 @@ def _extract_links(downloader: 'Downloader2', content: str):
         href = css_tag['href'].strip()
         if not len(href):
             continue
+        if not _is_internal_link(href, downloader.my_domain):
+            continue
 
-        links_css_js.append(URL4Download(downloader, href, URL4Download.TYPE_CSS_JS))
+        url = URL4Download(downloader, href, URL4Download.TYPE_CSS_JS)
+        links_css_js.append(url)
+        css_tag['href'] = url.target_name
 
 
-    return content, links_html + links_css_js + links_imgs
+    return str(soup), links_html + links_css_js + links_imgs
+
 
 class Downloader2:
 
@@ -492,7 +557,7 @@ class Downloader2:
 
                 logger.debug(f"Content len {len(content)}")
 
-                new_content, links = _extract_links(self, content)
+                content, links = _extract_links(self, content)
 
                 for link in links:
                     self.urls4download.add(link)
@@ -524,8 +589,8 @@ class Downloader2:
                     f.write(content)
 
             except Exception as e:
-                logger.error(f"Error write {url}: {e} to: {url.target_path}")
-                self.url_finished(url, f"Error write {url}: {e} to: {url.target_path}")
+                logger.error(f"Error write {url.info()}: {e} to: {url.target_path}")
+                self.url_finished(url, f"Error write {url.info()}: {e} to: {url.target_path}")
                 continue
 
             self.url_finished(url)

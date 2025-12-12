@@ -8,7 +8,7 @@ from pathlib import Path
 from django.test import TestCase
 from core.tests.tools import create_profile, create_site_sub_site
 from core.tools import get_subsite_dir, dir_copy, generate_uniq_subsite_dir_for_site
-from core.downloader import Downloader, Downloader2
+from core.downloader import Downloader, Downloader2, SafePathResolver
 
 test_data_dir_site = 'test_data/test_site/'
 test_data_dir_to_download = 'test_data/test_site_download/'
@@ -17,9 +17,9 @@ class SilentHandler(http.server.SimpleHTTPRequestHandler):
     def log_message(self, format, *args):  # тихий хэндлер
         pass
 
-def _serve_dir(directory: str):
+def _serve_dir(directory: str, port: int = 0):
     Handler = functools.partial(SilentHandler, directory=directory)
-    httpd = socketserver.TCPServer(("127.0.0.1", 0), Handler)
+    httpd = socketserver.TCPServer(("127.0.0.1", port), Handler)
     port = httpd.server_address[1]
     t = threading.Thread(target=httpd.serve_forever, daemon=True)
     t.start()
@@ -28,6 +28,7 @@ def _serve_dir(directory: str):
 
 
 class SiteDownloaderTest(TestCase):
+
 
     def test_site_downloader(self):
 
@@ -42,6 +43,9 @@ class SiteDownloaderTest(TestCase):
 
         finally:
             httpd.shutdown()
+
+        for url in d.urls4download:
+            print(f"URL: {url.info()}")
 
 
 
