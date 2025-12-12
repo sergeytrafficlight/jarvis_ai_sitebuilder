@@ -35,6 +35,7 @@ class SiteDownloaderTest(TestCase):
         httpd, base_url = _serve_dir(test_data_dir_site)
 
         try:
+            
             if os.path.exists(test_data_dir_to_download):
                 shutil.rmtree(test_data_dir_to_download)
 
