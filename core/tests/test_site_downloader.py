@@ -9,6 +9,7 @@ from django.test import TestCase
 from core.tests.tools import create_profile, create_site_sub_site
 from core.tools import get_subsite_dir, dir_copy, generate_uniq_subsite_dir_for_site
 from core.downloader import Downloader, Downloader2, SafePathResolver
+from core.site_analyzer import SiteAnalyzer
 
 test_data_dir_site = 'test_data/test_site/'
 test_data_dir_to_download = 'test_data/test_site_download/'
@@ -47,6 +48,30 @@ class SiteDownloaderTest(TestCase):
 
         for url in d.urls4download:
             print(f"URL: {url.info()}")
+
+        s = SiteAnalyzer(test_data_dir_site)
+        s = s.analyze()
+
+        original_site = {}
+        for k in s:
+            relative = s[k]['relative']
+            original_site[relative] = s[k]
+
+        s = SiteAnalyzer(test_data_dir_to_download)
+        s = s.analyze()
+
+        downloaded_site = {}
+        for k in s:
+            relative = s[k]['relative']
+            downloaded_site[relative] = s[k]
+
+        print("==")
+        print(original_site)
+        print("==")
+        print(downloaded_site)
+
+        print(f":: {original_site == downloaded_site}")
+
 
 
 
