@@ -153,4 +153,62 @@ def create_site_sub_site(p: Profile):
     return sub_site
 
 
+def compare_dicts(d1, d2):
+    differences = []
+
+    def compare(v1, v2, path="root"):
+        # Разные типы
+        if type(v1) != type(v2):
+            differences.append(
+                f"{path}: type mismatch ({type(v1).__name__} != {type(v2).__name__})"
+            )
+            return
+
+        # Словари
+        if isinstance(v1, dict):
+            keys1 = set(v1.keys())
+            keys2 = set(v2.keys())
+
+            for key in keys1 - keys2:
+                differences.append(f"{path}: key '{key}' missing in second dict")
+
+            for key in keys2 - keys1:
+                differences.append(f"{path}: extra key '{key}' in second dict")
+
+            for key in keys1 & keys2:
+                compare(v1[key], v2[key], f"{path}.{key}")
+
+        # Списки / кортежи
+        elif isinstance(v1, (list, tuple)):
+            if len(v1) != len(v2):
+                differences.append(
+                    f"{path}: length mismatch ({len(v1)} != {len(v2)})"
+                )
+                return
+
+            for i, (i1, i2) in enumerate(zip(v1, v2)):
+                compare(i1, i2, f"{path}[{i}]")
+
+        # Множества
+        elif isinstance(v1, set):
+            if v1 != v2:
+                differences.append(
+                    f"{path}: set mismatch ({v1} != {v2})"
+                )
+
+        # Остальные типы
+        else:
+            if v1 != v2:
+                differences.append(
+                    f"{path}: value mismatch ({v1} != {v2})"
+                )
+
+    compare(d1, d2)
+
+    if differences:
+        return False, "; ".join(differences)
+
+    return True, "OK"
+
+
 

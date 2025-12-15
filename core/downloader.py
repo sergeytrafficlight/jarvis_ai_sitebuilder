@@ -76,155 +76,6 @@ def _compose_full_link(link, current_path):
     return urljoin(current_path, link)
 
 
-class Downloader:
-
-
-    def __init__(self, url: str, download_dir: str, max_depth : int = 5, max_threads: int = 5):
-
-        if not is_valid_http_url(url):
-            raise Exception(f"Invalid url: {url}")
-
-        self.url = url
-        self.url_cleaned = _clean_url(url)
-        self.my_domain = _get_domain(url)
-
-        self.dir = download_dir
-        self.max_depth = max_depth
-        self.max_threads = max_threads
-
-        self.visited_url = set()
-
-        self.to_download_js_css = {}
-        self.to_download_img = {}
-
-    def extract_links(self, content):
-        soup = BeautifulSoup(content, 'html.parser')
-
-        links_html = []
-        links_css_js = []
-        links_imgs = []
-
-        for a_tag in soup.find_all('a'):
-            if not a_tag.get('href'):
-                continue
-            href = a_tag['href'].strip()
-            if not len(href):
-                continue
-            if href.startswith(('#', 'javascript:', 'mailto:', 'tel:')):
-                continue
-
-            links_html.append(href)
-
-        for form_tag in soup.find_all('form'):
-            if not form_tag.get('action'):
-                continue
-            action = form_tag.get('action')
-            if not len(action):
-                continue
-            if action.startswith(('#', 'javascript:', 'mailto:', 'tel:')):
-                continue
-            links_html.append(action)
-
-
-        for img_tag in soup.find_all('img'):
-            if not img_tag.get('src'):
-                continue
-            src = img_tag['src'].strip()
-            if not len(src):
-                continue
-            links_imgs.append(src)
-
-        for script_tag in soup.find_all('script'):
-            if not script_tag.get('src'):
-                continue
-            src = script_tag['src'].strip()
-            if not len(src):
-                continue
-            links_css_js.append(src)
-
-        for css_tag in soup.find_all('link'):
-            if not css_tag.get('href'):
-                continue
-            href = css_tag['href'].strip()
-            if not len(href):
-                continue
-
-            links_css_js.append(href)
-
-
-        return links_html, links_css_js, links_imgs
-
-
-    def get_structure(self, url, current_depth):
-        logger.debug(f"cycle url: {url}")
-        clean_url = _clean_url(url)
-        logger.debug(f"clean url: {clean_url}")
-        if clean_url in self.visited_url:
-            logger.debug(f"already visited {clean_url}")
-            return None
-
-        self.visited_url.add(clean_url)
-
-        with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
-            context = browser.new_context()
-            page = context.new_page()
-
-            try:
-                page.goto(url, wait_until='networkidle')
-                page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-                content = page.content()
-                logger.debug(f"done")
-            except Exception as e:
-                logger.error(f"Error loading {url}: {e}")
-                return None
-            finally:
-                browser.close()
-
-        logger.debug(f"downloaded {len(content)}")
-        links_html, links_css_js, links_imgs = self.extract_links(content)
-
-
-
-        for l in links_css_js:
-            if not _is_internal_link(l, self.my_domain):
-                continue
-            clean = _clean_url(l)
-            if clean in self.to_download_js_css:
-                continue
-            self.to_download_js_css[clean] = l
-
-        for l in links_imgs:
-            if not _is_internal_link(l, self.my_domain):
-                continue
-            clean = _clean_url(l)
-            if clean in self.to_download_img:
-                continue
-            self.to_download_img[clean] = l
-
-        for l in links_html:
-            if not _is_internal_link(l, self.my_domain):
-                continue
-
-            new_link = _compose_full_link(l, clean_url)
-            logger.debug(f"link {l} clean url {clean_url}, composed {new_link}")
-            self.get_structure(new_link, current_depth + 1)
-
-
-
-
-
-    def download(self):
-        os.makedirs(self.dir, exist_ok=True)
-
-        logger.debug(f"url {self.url} -> {self.dir}")
-        logger.debug(f"clean url: {self.url_cleaned}")
-
-        self.get_structure(self.url, 0)
-
-        logger.debug(f"imgs: {len(self.to_download_img)}")
-        logger.debug(f"js_css: {len(self.to_download_js_css)}")
-
 class URL4Download:
 
     STATUS_NEW = 'NEW'
@@ -330,7 +181,7 @@ def _get_target_name(base_web_dir: str, url: str) -> str:
     base_normalized = f"{base_parsed.scheme}://{base_parsed.netloc}{base_parsed.path}"
     url_normalized = f"{url_parsed.scheme}://{url_parsed.netloc}{url_parsed.path}"
 
-    # Добавляем завершающий слеш к base_normalized если это не файл
+    # Добавляем завершающий слеш к base_normalized если это не файл44
     if '.' not in base_normalized.split('/')[-1] and not base_normalized.endswith('/'):
         base_normalized += '/'
 
@@ -434,9 +285,15 @@ def _extract_links(downloader: 'Downloader2', content: str):
     return str(soup), links_html + links_css_js + links_imgs
 
 
-class Downloader2:
+class Downloader:
 
-    def __init__(self, url: str, download_dir: str, max_depth : int = 5, max_threads: int = 5, timeout_per_url: int = 10):
+    def __init__(self, url: str,
+                 download_dir: str,
+                 max_depth : int = 5,
+                 max_threads: int = 5,
+                 timeout_per_url: int = 10,
+                 max_resources_to_download: int = 50,
+                 max_size_to_download: int = 50 * 1024 * 1024):
 
         if not is_valid_http_url(url):
             raise Exception(f"Invalid url: {url}")
@@ -447,7 +304,6 @@ class Downloader2:
         self.base_web_dir = _get_web_dir(url)
 
         self.dir = download_dir
-        self.max_depth = max_depth
         self.max_threads = max_threads
 
         self.urls4download = set()
@@ -455,7 +311,26 @@ class Downloader2:
         self.urls2download_new_urls_found = threading.Event()
 
         self.timeout_per_url = timeout_per_url
+        self.max_depth = max_depth
+        self.max_resources_to_download = max_resources_to_download
+        self.max_size_to_download = max_size_to_download
 
+        self.resources_downloaded_count = 0
+        self.size_downloaded = 0
+
+        self.errors = []
+
+
+    def add_error(self, msg: str, lock: bool = False):
+
+        if lock:
+            self.urls4download_lock.acquire()
+
+        if msg not in self.errors:
+            self.errors.append(msg)
+
+        if lock:
+            self.urls4download_lock.release()
 
     def get_url(self):
         while True:
@@ -479,6 +354,21 @@ class Downloader2:
                 self.urls4download_lock.acquire()
                 continue
 
+    def put_url(self, url: URL4Download):
+        with self.urls4download_lock:
+            added = False
+            if len(self.urls4download) >= self.max_resources_to_download:
+                self.add_error(f"Can't download {url.url}, max resources to download reached")
+            elif self.size_downloaded > self.max_size_to_download:
+                self.add_error(f"Can't download {url.url}, max size to download reached")
+            else:
+                if url not in self.urls4download:
+                    added = True
+                    self.urls4download.add(url)
+
+        if added:
+            self.urls2download_new_urls_found.set()
+
     def url_finished(self, url: URL4Download, error: str = ''):
         with self.urls4download_lock:
             url.status = url.status = URL4Download.STATUS_DONE
@@ -492,7 +382,7 @@ class Downloader2:
                 context = browser.new_context()
                 page = context.new_page()
 
-                page.goto(url.full_url, wait_until='networkidle')
+                page.goto(url.full_url, wait_until='networkidle', timeout=self.timeout_per_url*1000)
                 page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
                 content = page.content()
             finally:
@@ -551,8 +441,9 @@ class Downloader2:
                     content = self.download_url_html(url)
                     logger.debug(f"done")
                 except Exception as e:
-                    logger.error(f"Error loading {url}: {e}")
-                    self.url_finished(url, f"Error loading {url}: {e}")
+                    logger.error(f"Error loading {url.info()}: {e}")
+                    self.add_error(f"Can't loading {url.url}: {e}", lock=True)
+                    self.url_finished(url, f"Error loading {url.url}: {e}")
                     continue
 
                 logger.debug(f"Content len {len(content)}")
@@ -560,7 +451,7 @@ class Downloader2:
                 content, links = _extract_links(self, content)
 
                 for link in links:
-                    self.urls4download.add(link)
+                    self.put_url(link)
 
             elif url.type in [URL4Download.TYPE_CSS_JS, URL4Download.TYPE_IMG]:
 
@@ -568,10 +459,9 @@ class Downloader2:
                     content = self.download_url_common(url)
                 except Exception as e:
                     logger.error(f"Error loading {url}: {e}")
+                    self.add_error(f"Can't loading {url.url}: {e}", lock=True)
                     self.url_finished(url, f"Error loading {url}: {e}")
                     continue
-
-
 
             else:
                 raise Exception(f"Unknown url type: {url.type}: {url.info()}")
@@ -585,8 +475,13 @@ class Downloader2:
                 mode = 'wb' if isinstance(content, bytes) else 'w'
                 encoding = None if isinstance(content, bytes) else 'utf-8'
 
-                with open(url.target_path, mode, encoding=encoding) as f:
-                    f.write(content)
+                with self.urls4download_lock:
+                    if self.size_downloaded > self.max_size_to_download:
+                        self.add_error(f"Can't save file {url.url} - max size to download reached")
+                    else:
+                        with open(url.target_path, mode, encoding=encoding) as f:
+                            f.write(content)
+                        self.size_downloaded += len(content)
 
             except Exception as e:
                 logger.error(f"Error write {url.info()}: {e} to: {url.target_path}")
@@ -599,7 +494,7 @@ class Downloader2:
     def download(self):
         os.makedirs(self.dir, exist_ok=True)
 
-        self.urls4download.add(URL4Download(self, self.url, URL4Download.TYPE_HTML))
+        self.put_url(URL4Download(self, self.url, URL4Download.TYPE_HTML))
 
         threads = []
         for i in range(self.max_threads):
