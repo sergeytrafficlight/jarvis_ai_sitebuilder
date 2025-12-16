@@ -3,3 +3,342 @@
 нужно передавать текущую страницу из iframe-а, чтобы ии лучше понимал где что поправить
 
 если я прошу изменить размеры изображения, то система создает новое изображение, а информация о старом теряется.
+
+
+----
+
+
+Ниже готовые правки, чтобы выполнить ваш запрос.
+
+Что меняем
+- На /dashboard/ убираем блоки “Текущий баланс” и “Пополнить”.
+- Вместо одной кнопки “Создать сайт” — две кнопки:
+  - 📋 Скопировать сайт
+  - ✨ Создать сайт
+- Две отдельные модалки:
+  - Скопировать сайт: поле URL + превью + кнопки “Скопировать” и “Отмена”. Без промта и количества.
+  - Создать сайт: поле промта + количество, без URL/превью.
+
+1) Замените шаблон core/templates/dashboard.html
+Основные изменения: убрал верхний блок с балансом/пополнением/кнопкой; добавил две новые кнопки; подключил новые модалки; обновил JS на открытие нужных модалок. Остальная часть (таблица сайтов, массовые действия, статусы, переименование) — без изменений.
+
+Полный файл:
+[Содержимое файла слишком большое, поэтому передаю только изменённые части. Замените верхнюю часть до секции “Ваши сайты” и блок инклюдов/JS, как ниже.]
+
+Замените шапку дашборда и подключение модалок:
+-----------------------------------------------
+<h2>Дашборд</h2>
+
+<div class="card center" style="display:flex; gap:12px; justify-content:center; flex-wrap:wrap;">
+  <button class="btn btn-primary" id="openCopyModalBtn">📋 Скопировать сайт</button>
+  <button class="btn btn-primary" id="openCreateModalBtn">✨ Создать сайт</button>
+</div>
+
+<section class="sites-section">
+  <h3>Ваши сайты</h3>
+  ...
+
+Внизу файла вместо
+-----------------------------------------------
+{% include 'components/modal_create_site.html' with modal_id="modal_create_site" %}
+{% include 'components/modal_edit_site_name.html' %}
+
+должно быть:
+-----------------------------------------------
+{% include 'components/modal_copy_site.html' %}
+{% include 'components/modal_create_site_prompt.html' %}
+{% include 'components/modal_edit_site_name.html' %}
+
+И замените старый JS, который открывал старую модалку, на это (в том же месте, где были скрипты про модалку создания):
+-----------------------------------------------
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const btnCopy  = document.getElementById('openCopyModalBtn');
+  const btnCreate = document.getElementById('openCreateModalBtn');
+
+  if (btnCopy)   btnCopy.addEventListener('click', () => { modal_copy_site_open(); });
+  if (btnCreate) btnCreate.addEventListener('click', () => { modal_create_site_prompt_open(); });
+
+  // дальше — весь ваш существующий код (выделение/удаление/статусы и пр.) без изменений
+});
+</script>
+
+2) Новый файл core/templates/components/modal_copy_site.html
+Модалка “Скопировать сайт”: URL + превью, без промта/количества. При нажатии “Скопировать” отправляет POST на /create_site_task/ с refUrl и автопромтом “Сделай максимально похожую копию данного сайта” и count=1.
+
+-----------------------------------------------
+{% load i18n %}
+<div class="modal-overlay" id="modal_copy_site" hidden>
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Скопировать сайт</h3>
+      <button class="modal-close" id="copyModalCloseBtn" aria-label="{% trans 'Закрыть' %}">✕</button>
+    </div>
+    <div class="modal-body two-columns">
+      <div class="modal-left">
+        <div class="form-group">
+          <label for="copyRefUrl"><strong>{% trans "Укажите URL сайта" %}:</strong></label>
+          <input type="url" id="copyRefUrl" placeholder="https://example.com" />
+          <div class="hint" id="copyRefHint">{% trans "Референс-сайт не используется" %}</div>
+          <div class="hint error" id="copyRefError" style="display:none;"></div>
+          <div class="hint muted">{% trans "Этот сайт будет использован как образец для копирования" %}</div>
+        </div>
+      </div>
+
+      <div class="modal-right">
+        <div class="screenshot-box" id="copyScreenshotBox">
+          <div class="gradient-loader" id="copyPreviewLoader" style="display:none;"></div>
+
+          <div class="preview-placeholder" id="copyPreviewNotUsed">
+            <div class="placeholder-icon">🛈</div>
+            <div class="placeholder-text">{% trans "Референс-сайт не используется" %}</div>
+          </div>
+
+          <div class="preview-placeholder error" id="copyPreviewErrorState" style="display:none;">
+            <div class="placeholder-icon">⚠</div>
+            <div class="placeholder-text">{% trans "Ошибка загрузки" %}</div>
+          </div>
+
+          <div class="screenshot-scroll">
+            <img id="copyRefPreview" alt="{% trans 'Превью сайта' %}" />
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" id="copyStartBtn" disabled>{% trans 'Скопировать' %}</button>
+      <button class="btn btn-secondary" id="copyCancelBtn">{% trans 'Отмена' %}</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const COPY_PROMPT_TEXT = "{% trans 'Сделай максимально похожую копию данного сайта' %}";
+  const modal    = document.getElementById('modal_copy_site');
+  const input    = document.getElementById('copyRefUrl');
+  const btnOk    = document.getElementById('copyStartBtn');
+  const btnClose = document.getElementById('copyModalCloseBtn');
+  const btnCancel= document.getElementById('copyCancelBtn');
+
+  const hint  = document.getElementById('copyRefHint');
+  const errEl = document.getElementById('copyRefError');
+
+  const loader = document.getElementById('copyPreviewLoader');
+  const notUsed= document.getElementById('copyPreviewNotUsed');
+  const errBox = document.getElementById('copyPreviewErrorState');
+  const img    = document.getElementById('copyRefPreview');
+
+  let typingTimer = null;
+  let lastController = null;
+  const delay = 1200;
+  let screenshotOk = false;
+
+  function show()   { modal.removeAttribute('hidden'); modal.classList.add('active'); }
+  function hide()   { modal.classList.remove('active'); modal.setAttribute('hidden',''); resetState(); }
+  function resetState() {
+    setNotUsed();
+    input.value = input.value || '';
+    btnOk.disabled = true;
+  }
+
+  function setLoading() {
+    errEl.style.display = 'none';
+    hint.textContent = "{% trans 'Загрузка превью...' %}";
+    screenshotOk = false;
+
+    loader.style.display = 'block';
+    notUsed.style.display = 'none';
+    errBox.style.display = 'none';
+    img.style.display = 'none';
+    img.src = '';
+    btnOk.disabled = true;
+  }
+  function setNotUsed() {
+    errEl.style.display = 'none';
+    hint.textContent = "{% trans 'Референс-сайт не используется' %}";
+    screenshotOk = false;
+
+    loader.style.display = 'none';
+    notUsed.style.display = 'flex';
+    errBox.style.display = 'none';
+    img.style.display = 'none';
+    img.src = '';
+    btnOk.disabled = true;
+  }
+  function setError(message) {
+    errEl.textContent = message || "{% trans 'Ошибка' %}";
+    errEl.style.display = 'block';
+    hint.textContent = "{% trans 'Ошибка получения превью' %}";
+    screenshotOk = false;
+
+    loader.style.display = 'none';
+    notUsed.style.display = 'none';
+    errBox.style.display = 'flex';
+    img.style.display = 'none';
+    img.src = '';
+    btnOk.disabled = true;
+  }
+  function setSuccess(url) {
+    errEl.style.display = 'none';
+    hint.textContent = "";
+    screenshotOk = true;
+
+    loader.style.display = 'none';
+    notUsed.style.display = 'none';
+    errBox.style.display = 'none';
+    img.style.display = 'block';
+    img.onload = () => {};
+    img.src = url;
+    btnOk.disabled = false;
+  }
+
+  function requestPreview(url) {
+    if (lastController) lastController.abort();
+    lastController = new AbortController();
+    setLoading();
+
+    fetch("{% url 'reference_screenshot' %}", {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+      body: JSON.stringify({ url }),
+      signal: lastController.signal
+    })
+      .then(r => r.json())
+      .then(d => {
+        if (d.status) setSuccess(d.img);
+        else setError(d.error || "{% trans 'Ошибка генерации скриншота' %}");
+      })
+      .catch(e => {
+        if (e.name !== 'AbortError') setError("{% trans 'Ошибка соединения с сервером' %}");
+      });
+  }
+
+  function onInputChanged() {
+    const url = (input.value || '').trim();
+    if (!url) { setNotUsed(); return; }
+    if (typingTimer) clearTimeout(typingTimer);
+    typingTimer = setTimeout(() => requestPreview(url), delay);
+  }
+
+  btnOk.addEventListener('click', () => {
+    const url = (input.value || '').trim();
+    if (!url || !screenshotOk) return;
+    btnOk.disabled = true;
+
+    fetch('/create_site_task/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+      body: JSON.stringify({
+        refUrl: url,
+        taskPrompt: COPY_PROMPT_TEXT,
+        siteCount: 1
+      })
+    })
+      .then(r => r.json())
+      .then(d => {
+        if (d.status) {
+          window.location.href = d.redirect_url || '/dashboard/';
+        } else {
+          alert(d.error || 'Ошибка запуска задачи');
+          btnOk.disabled = false;
+        }
+      })
+      .catch(() => { alert('Ошибка сети'); btnOk.disabled = false; });
+  });
+
+  btnClose.addEventListener('click', hide);
+  btnCancel.addEventListener('click', hide);
+  input.addEventListener('input', onInputChanged);
+
+  window.modal_copy_site_open = function() {
+    resetState();
+    show();
+    const val = (input.value || '').trim();
+    if (!val) setNotUsed();
+  }
+})();
+</script>
+
+3) Новый файл core/templates/components/modal_create_site_prompt.html
+Модалка “Создать сайт”: только промт и количество. Без URL/превью. POST на /create_site_task/ с taskPrompt и siteCount.
+
+-----------------------------------------------
+{% load i18n %}
+<div class="modal-overlay" id="modal_create_site_prompt" hidden>
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Создать сайт</h3>
+      <button class="modal-close" id="createPromptCloseBtn" aria-label="{% trans 'Закрыть' %}">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:grid; gap:12px;">
+        <label><strong>{% trans "Что нужно сделать" %}</strong></label>
+        <textarea id="createPrompt" rows="7" class="textarea" placeholder="{% trans 'Опишите, какой сайт нужно сгенерировать...' %}"></textarea>
+
+        <div class="form-group inline">
+          <label for="createSiteCount"><strong>{% trans "Количество сайтов" %}</strong></label>
+          <input type="number" id="createSiteCount" value="1" min="1" />
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" id="createPromptStartBtn">{% trans 'Создать' %}</button>
+      <button class="btn btn-secondary" id="createPromptCancelBtn">{% trans 'Отмена' %}</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const modal  = document.getElementById('modal_create_site_prompt');
+  const btnOk  = document.getElementById('createPromptStartBtn');
+  const btnX   = document.getElementById('createPromptCloseBtn');
+  const btnC   = document.getElementById('createPromptCancelBtn');
+  const prompt = document.getElementById('createPrompt');
+  const count  = document.getElementById('createSiteCount');
+
+  function show() { modal.removeAttribute('hidden'); modal.classList.add('active'); }
+  function hide() { modal.classList.remove('active'); modal.setAttribute('hidden',''); }
+
+  btnOk.addEventListener('click', () => {
+    const p = (prompt.value || '').trim();
+    const c = parseInt(count.value || '1', 10);
+    btnOk.disabled = true;
+
+    fetch('/create_site_task/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+      body: JSON.stringify({
+        taskPrompt: p,
+        siteCount: c
+      })
+    })
+      .then(r => r.json())
+      .then(d => {
+        if (d.status) {
+          window.location.href = d.redirect_url || '/dashboard/';
+        } else {
+          alert(d.error || 'Ошибка запуска задачи');
+          btnOk.disabled = false;
+        }
+      })
+      .catch(() => { alert('Ошибка сети'); btnOk.disabled = false; });
+  });
+
+  btnX.addEventListener('click', hide);
+  btnC.addEventListener('click', hide);
+
+  window.modal_create_site_prompt_open = function() {
+    show();
+    setTimeout(() => prompt && prompt.focus(), 20);
+  };
+})();
+</script>
+
+Примечания
+- Бэкенд в /create_site_task/ уже поддерживает опциональные поля: prompt (taskPrompt), ref_url (refUrl), count (siteCount). Для “Скопировать” отправляем refUrl и фиксированный промт на копирование (без показа пользователю), count=1. Для “Создать сайт” — только prompt+count.
+- Баланс по-прежнему виден в шапке сайта (base.html). В центральной части дашборда баланс и “Пополнить” удалены.
+- Иконки на кнопках сделаны emoji: можно заменить на SVG при необходимости.
+
+Если нужно — могу сразу прислать полностью обновлённый файл dashboard.html целиком.
