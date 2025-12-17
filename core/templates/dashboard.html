@@ -2,19 +2,29 @@
 {% load i18n %}
 {% block title %}{% trans "Дашборд" %}{% endblock %}
 {% block content %}
-<h2>{% trans "Дашборд" %}</h2>
-<div class="dashboard-top">
-    <div class="balance-card">
-        <div class="balance-label">{% trans "Текущий баланс" %}</div>
-        <a class="balance-value" href="{% url 'billing_history' %}">{{ profile.balance|default:"0.00" }} USD</a>
-    </div>
-    <div class="topup-action">
-        <a class="btn btn-primary" href="{% url 'topup' %}">{% trans "Пополнить" %}</a>
-    </div>
-    <div class="topup-action">
-        <button class="btn btn-primary" id="modal_create_site_open_btn_id">{% trans "Создать сайт" %}</button>
-    </div>
+<h2>Дашборд</h2>
 
+
+<div class="card" style="display:flex; gap:14px; justify-content:flex-start; align-items:center; flex-wrap:wrap;">
+  {% if not has_funds %}
+    <a class="btn btn-primary btn-lg" href="{% url 'topup' %}" id="dashboardTopupBtn">💳 Пополнить баланс</a>
+  {% endif %}
+
+  <button
+    class="btn btn-primary btn-lg"
+    id="openCopyModalBtn"
+    {% if not has_funds %}disabled title="Недостаточно средств"{% endif %}
+  >
+    📋 Скопировать сайт
+  </button>
+
+  <button
+    class="btn btn-primary btn-lg"
+    id="openCreateModalBtn"
+    {% if not has_funds %}disabled title="Недостаточно средств"{% endif %}
+  >
+    ✨ Создать сайт
+  </button>
 </div>
 
 <section class="sites-section">
@@ -87,18 +97,18 @@
 </section>
 
 
-{% include 'components/modal_create_site.html' with modal_id="modal_create_site" %}
+{% include 'components/modal_copy_site.html' %}
+{% include 'components/modal_create_site_prompt.html' %}
 {% include 'components/modal_edit_site_name.html' %}
-
-
 
 <script>
 document.addEventListener('DOMContentLoaded', () => {
-    // Кнопка открытия модалки создания
-    const modal_create_site_open_btn = document.getElementById('modal_create_site_open_btn_id');
-    if (modal_create_site_open_btn) {
-        modal_create_site_open_btn.addEventListener('click', () => { modal_create_site_open(); });
-    }
+  const btnCopy  = document.getElementById('openCopyModalBtn');
+  const btnCreate = document.getElementById('openCreateModalBtn');
+
+  if (btnCopy)   btnCopy.addEventListener('click', () => { modal_copy_site_open(); });
+  if (btnCreate) btnCreate.addEventListener('click', () => { modal_create_site_prompt_open(); });
+
 
     // Выбор и массовое удаление
     const btnSelectAll   = document.getElementById('btnSelectAll');

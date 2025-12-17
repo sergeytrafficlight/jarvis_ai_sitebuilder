@@ -212,7 +212,7 @@ def _extract_links(downloader: 'Downloader2', content: str):
         href = a_tag['href'].strip()
         if not len(href):
             continue
-        if href.startswith(('#', 'javascript:', 'mailto:', 'tel:')):
+        if href.startswith(('#', 'javascript:', 'mailto:', 'mail:', 'tel:')):
             continue
         if not _is_internal_link(href, downloader.my_domain):
             continue
@@ -229,7 +229,7 @@ def _extract_links(downloader: 'Downloader2', content: str):
         action = form_tag.get('action')
         if not len(action):
             continue
-        if action.startswith(('#', 'javascript:', 'mailto:', 'tel:')):
+        if action.startswith(('#', 'javascript:', 'mailto:','mail:',  'tel:')):
             continue
         if not _is_internal_link(action, downloader.my_domain):
             continue
@@ -382,7 +382,9 @@ class Downloader:
                 context = browser.new_context()
                 page = context.new_page()
 
-                page.goto(url.full_url, wait_until='networkidle', timeout=self.timeout_per_url*1000)
+                #page.goto(url.full_url, wait_until='networkidle', timeout=self.timeout_per_url*1000)
+                page.goto(url.full_url, wait_until='domcontentloaded', timeout=self.timeout_per_url * 1000)
+
                 page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
                 content = page.content()
             finally:

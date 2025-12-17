@@ -22,6 +22,16 @@ def task_generate_site(sub_site: SubSiteProject, prompt: str):
         data_payload=payload,
     )
 
+def task_copy_site_by_url(sub_site: SubSiteProject, ref_url: str):
+    payload = {
+        'ref_url': ref_url,
+    }
+    return MyTask.objects.create(
+        sub_site=sub_site,
+        type=MyTask.TYPE_COPY_SITE_BY_URL,
+        data_payload=payload,
+    )
+
 def task_edit_file(sub_site: SubSiteProject, prompt: str, file_path: str):
     payload = {
         'path': file_path,

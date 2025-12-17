@@ -14,7 +14,7 @@ from core.log import *
 logger.setLevel(logging.DEBUG)
 
 
-DEFAULT_TIMEOUT_MS = 30000
+DEFAULT_TIMEOUT_MS = 60000
 
 async def take_full_screenshot(url: str,
                                out_path: str,
@@ -42,11 +42,14 @@ async def take_full_screenshot(url: str,
 
         page = await context.new_page()
         try:
-            await page.goto(url, wait_until="networkidle", timeout=timeout)
+            logger.debug(f"go to url, timeout {timeout}")
+            await page.goto(url, wait_until="domcontentloaded", timeout=timeout)
         except PWTimeoutError:
+            logger.debug(f"timeout")
             await browser.close()
             return False, _("Timeout")
         except Exception as e:
+            logger.debug(f"error: {str(e)}")
             await browser.close()
             return False, str(e)
 

@@ -1,4 +1,5 @@
 import json
+from decimal import Decimal
 from django.views.decorators.csrf import csrf_exempt
 from django.utils import timezone
 from datetime import timedelta
@@ -38,7 +39,7 @@ from django.utils.text import slugify
 from .models import PaymentGatewaySettings, TopUpRequest
 import payment.types as payment_types
 import payment.cryptogator as payment_cryptogator
-from core.task_wrapper import task_generate_site_name_classification, task_generate_site, task_edit_image, task_edit_site
+from core.task_wrapper import task_generate_site_name_classification, task_generate_site, task_edit_image, task_edit_site, task_copy_site_by_url
 
 from core.log import *
 logger.setLevel(logging.DEBUG)
@@ -55,18 +56,22 @@ def home(request):
 @login_required
 def dashboard(request):
     profile = getattr(request.user, "profile", None)
+    user_balance = profile.get_balance() if profile else Decimal("0")
+    has_funds = user_balance > 0
 
-    # показываем только неархивные сайты
     qs = SiteProject.objects.filter(user=request.user).exclude(is_archived=True)
 
-    paginator = Paginator(qs, 10)  # 10 сайтов на страницу
+    paginator = Paginator(qs, 10)
     page_number = request.GET.get("page")
     page_obj = paginator.get_page(page_number)
 
     return render(request, "dashboard.html", {
         "profile": profile,
         "page_obj": page_obj,
+        "balance": user_balance,
+        "has_funds": has_funds,
     })
+
 
 @login_required
 @require_POST
@@ -221,10 +226,57 @@ def user_file_view(request, user_id, path):
         # Для прочих файлов — 404
         raise Http404('File not found')
 
+@login_required
+@require_POST
+def create_site_task_copy_by_url(request):
+    try:
+        data = json.loads(request.body.decode("utf-8"))
+    except Exception:
+        return JsonResponse({"status": False, "error": "Invalid JSON"}, status=400)
+
+    ref_url = (data.get("ref_url") or data.get("refUrl") or "").strip()
+
+    # Валидация URL если указан
+    if ref_url:
+        ok, msg = is_valid_http_url(ref_url)
+        if not ok:
+            return JsonResponse({"status": False, "error": msg}, status=400)
+
+
+    base_name = "Сайт"
+    now_str = timezone.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    site = SiteProject.objects.create(
+        user=request.user,
+        name=f"{base_name} {now_str}",
+        ref_site_url=ref_url,
+    )
+
+    full_path, uniq_dir = generate_uniq_subsite_dir_for_site(site)
+
+    sub_site = SubSiteProject.objects.create(
+        site=site,
+        root_sub_site=None,
+        dir = uniq_dir,
+    )
+
+    # Запишем задачу в MyTask
+    task_copy_site_by_url(sub_site, ref_url=ref_url)
+
+    run_tasks.apply_async(args=[sub_site.id])
+
+    redirect_url = request.build_absolute_uri(
+        reverse("site_detail", args=[site.id])
+    )
+
+    return JsonResponse({
+        "status": True,
+        "redirect_url": redirect_url,
+    }, status=201)
 
 @login_required
 @require_POST
-def create_site_task(request):
+def create_site_task_prompt(request):
     try:
         data = json.loads(request.body.decode("utf-8"))
     except Exception:

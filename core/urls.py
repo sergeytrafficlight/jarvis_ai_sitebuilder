@@ -12,7 +12,8 @@ urlpatterns = [
 
     path("reference_screenshot/", views.reference_screenshot, name="reference_screenshot"),
     path("users/<int:user_id>/<path:path>", views.user_file_view, name="user_file"),
-    path("create_site_task/", views.create_site_task, name="create_site_task"),
+    path("create_site_task_prompt/", views.create_site_task_prompt, name="create_site_task_prompt"),
+    path("create_site_task_copy_by_url/", views.create_site_task_copy_by_url, name="create_site_task_copy_by_url"),
 
     path("sites/<int:site_id>/archive/", views.site_archive, name="site_archive"),
     path("sites/bulk_archive/", views.sites_bulk_archive, name="sites_bulk_archive"),

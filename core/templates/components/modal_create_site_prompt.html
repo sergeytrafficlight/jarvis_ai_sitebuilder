@@ -1,0 +1,71 @@
+{% load i18n %}
+<div class="modal-overlay" id="modal_create_site_prompt" hidden>
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Создать сайт</h3>
+      <button class="modal-close" id="createPromptCloseBtn" aria-label="{% trans 'Закрыть' %}">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:grid; gap:12px;">
+        <label><strong>{% trans "Что нужно сделать" %}</strong></label>
+        <textarea id="createPrompt" rows="7" class="textarea" placeholder="{% trans 'Опишите, какой сайт нужно сгенерировать...' %}"></textarea>
+
+        <div class="form-group inline">
+          <label for="createSiteCount"><strong>{% trans "Количество сайтов" %}</strong></label>
+          <input type="number" id="createSiteCount" value="1" min="1" />
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" id="createPromptStartBtn">{% trans 'Создать' %}</button>
+      <button class="btn btn-secondary" id="createPromptCancelBtn">{% trans 'Отмена' %}</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const modal  = document.getElementById('modal_create_site_prompt');
+  const btnOk  = document.getElementById('createPromptStartBtn');
+  const btnX   = document.getElementById('createPromptCloseBtn');
+  const btnC   = document.getElementById('createPromptCancelBtn');
+  const prompt = document.getElementById('createPrompt');
+  const count  = document.getElementById('createSiteCount');
+
+  function show() { modal.removeAttribute('hidden'); modal.classList.add('active'); }
+  function hide() { modal.classList.remove('active'); modal.setAttribute('hidden',''); }
+
+  btnOk.addEventListener('click', () => {
+    const p = (prompt.value || '').trim();
+    const c = parseInt(count.value || '1', 10);
+    btnOk.disabled = true;
+
+    fetch('/create_site_task_prompt/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+      body: JSON.stringify({
+        taskPrompt: p,
+        siteCount: c
+      })
+    })
+      .then(r => r.json())
+      .then(d => {
+        if (d.status) {
+          window.location.href = d.redirect_url || '/dashboard/';
+        } else {
+          alert(d.error || 'Ошибка запуска задачи');
+          btnOk.disabled = false;
+        }
+      })
+      .catch(() => { alert('Ошибка сети'); btnOk.disabled = false; });
+  });
+
+  btnX.addEventListener('click', hide);
+  btnC.addEventListener('click', hide);
+
+  window.modal_create_site_prompt_open = function() {
+    show();
+    setTimeout(() => prompt && prompt.focus(), 20);
+  };
+})();
+</script>

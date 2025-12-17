@@ -140,6 +140,7 @@ class MyTask(models.Model):
 
     TYPE_GENERATE_NAME = 'generate_name'
     TYPE_GENERATE_SITE = 'generate_site'
+    TYPE_COPY_SITE_BY_URL = 'copy_site_by_url'
     TYPE_GENERATE_IMAGE = 'generate_image'
     TYPE_EDIT_IMAGE = 'edit_image'
     TYPE_EDIT_SITE = 'edit_site'
@@ -148,6 +149,7 @@ class MyTask(models.Model):
     TYPE_CHOICES = (
         (TYPE_GENERATE_NAME, _("Генерация имени")),
         (TYPE_GENERATE_SITE, _("Генерация сайта")),
+        (TYPE_COPY_SITE_BY_URL, _("Копирование сайта по URL-у")),
         (TYPE_GENERATE_IMAGE, _("Генерация изображения")),
         (TYPE_EDIT_IMAGE, _("Редактирование изображения")),
         (TYPE_EDIT_SITE, _("Редактирование сайта")),
@@ -160,6 +162,7 @@ class MyTask(models.Model):
     type = models.CharField(max_length=20, choices=TYPE_CHOICES)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_AWAITING)
     message = models.TextField(blank=True, null=True)
+    errors = models.TextField(blank=True, null=True)
 
     data_payload = models.JSONField(
         default=dict,
