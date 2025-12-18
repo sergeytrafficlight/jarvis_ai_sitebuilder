@@ -31,11 +31,16 @@ async def take_full_screenshot(url: str,
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
     async with async_playwright() as pw:
-        browser = await pw.chromium.launch(headless=headless)
+        browser = await pw.firefox.launch(
+            headless=headless,
+            #executable_path="/usr/bin/google-chrome",
+        )
         context = await browser.new_context(
-            viewport={"width": 1280, "height": 800},
+            viewport={"width": 1920, "height": 1080},
             device_scale_factor=1,
-            extra_http_headers=headers or {}
+            extra_http_headers=headers or None,
+            user_agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+                       "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         )
         if cookies:
             await context.add_cookies(cookies)
@@ -43,7 +48,7 @@ async def take_full_screenshot(url: str,
         page = await context.new_page()
         try:
             logger.debug(f"go to url, timeout {timeout}")
-            await page.goto(url, wait_until="domcontentloaded", timeout=timeout)
+            await page.goto(url, wait_until="commit", timeout=timeout)
         except PWTimeoutError:
             logger.debug(f"timeout")
             await browser.close()

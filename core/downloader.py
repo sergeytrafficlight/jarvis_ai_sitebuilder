@@ -174,6 +174,7 @@ def _get_target_name(base_web_dir: str, url: str) -> str:
         Относительный путь от base_web_dir к url
     """
     # Нормализуем URL: убираем фрагменты, параметры запроса
+
     base_parsed = urlparse(base_web_dir)
     url_parsed = urlparse(url)
 
@@ -196,7 +197,14 @@ def _get_target_name(base_web_dir: str, url: str) -> str:
         return '/' + relative_part if not relative_part.startswith('/') else relative_part
     else:
         # Возвращаем полный путь из URL
-        return url_parsed.path or '/'
+
+        if url_parsed.scheme:
+            return url_parsed.path or './'
+        else:
+            if url_parsed.path.startswith('/'):
+                return '.' + url_parsed.path or './'
+            else:
+                return url_parsed.path or './'
 
 
 def _extract_links(downloader: 'Downloader2', content: str):
@@ -291,7 +299,7 @@ class Downloader:
                  download_dir: str,
                  max_depth : int = 5,
                  max_threads: int = 5,
-                 timeout_per_url: int = 10,
+                 timeout_per_url: int = 30,
                  max_resources_to_download: int = 50,
                  max_size_to_download: int = 50 * 1024 * 1024):
 
@@ -378,8 +386,13 @@ class Downloader:
         content = None
         with sync_playwright() as p:
             try:
-                browser = p.chromium.launch(headless=True)
-                context = browser.new_context()
+                browser = p.firefox.launch(headless=True)
+                context = browser.new_context(
+                    viewport={"width": 1920, "height": 1080},
+                    device_scale_factor=1,
+                    user_agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+                               "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                )
                 page = context.new_page()
 
                 #page.goto(url.full_url, wait_until='networkidle', timeout=self.timeout_per_url*1000)

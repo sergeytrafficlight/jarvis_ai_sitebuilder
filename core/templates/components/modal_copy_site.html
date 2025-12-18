@@ -10,19 +10,21 @@
         <div class="form-group">
           <label for="copyRefUrl"><strong>{% trans "Укажите URL сайта" %}:</strong></label>
           <input type="url" id="copyRefUrl" placeholder="https://example.com" />
-          <div class="hint" id="copyRefHint">{% trans "Референс-сайт не используется" %}</div>
+          <div class="hint" id="copyRefHint">{% trans "Введите URL" %}</div>
           <div class="hint error" id="copyRefError" style="display:none;"></div>
-          <div class="hint muted">{% trans "Этот сайт будет использован как образец для копирования" %}</div>
         </div>
       </div>
 
       <div class="modal-right">
         <div class="screenshot-box" id="copyScreenshotBox">
-          <div class="gradient-loader" id="copyPreviewLoader" style="display:none;"></div>
+          <div id="copyPreviewLoader" style="display:none;">
+              <div class="gradient-loader"></div>
+            </div>
+
 
           <div class="preview-placeholder" id="copyPreviewNotUsed">
             <div class="placeholder-icon">🛈</div>
-            <div class="placeholder-text">{% trans "Референс-сайт не используется" %}</div>
+            <div class="placeholder-text">{% trans "Введите URL" %}</div>
           </div>
 
           <div class="preview-placeholder error" id="copyPreviewErrorState" style="display:none;">
@@ -86,7 +88,7 @@
   }
   function setNotUsed() {
     errEl.style.display = 'none';
-    hint.textContent = "{% trans 'Референс-сайт не используется' %}";
+    hint.textContent = "{% trans 'Введите URL' %}";
     screenshotOk = false;
 
     loader.style.display = 'none';

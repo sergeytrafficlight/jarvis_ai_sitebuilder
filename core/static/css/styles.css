@@ -429,14 +429,15 @@ a:hover {
     opacity: 0.7;
 }
 
-  #previewLoader,
-  #copyPreviewLoader {
-      position: absolute;
-      z-index: 5;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-  }
+#previewLoader,
+#copyPreviewLoader {
+    position: absolute;
+    z-index: 5;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+
 
 
 .screenshot-box img {
@@ -504,21 +505,13 @@ a:hover {
     width: 72px;
     height: 72px;
     border-radius: 50%;
-    background: conic-gradient(
-        from 0deg,
-        #0051ff,
-        #00c3ff,
-        #008cff,
-        #0051ff
-    );
+    background: conic-gradient(from 0deg,#0051ff,#00c3ff,#008cff,#0051ff);
     animation: rotate 1s linear infinite;
     mask: radial-gradient(circle, transparent 55%, black 56%);
     margin: auto;
 }
+@keyframes rotate { to { transform: rotate(360deg); } }
 
-@keyframes rotate {
-    to { transform: rotate(360deg); }
-}
 
 .screenshot-scroll {
     width: 100%;
