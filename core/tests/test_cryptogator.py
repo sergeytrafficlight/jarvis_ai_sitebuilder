@@ -65,7 +65,7 @@ class CryptogatorTest(TestCase):
 
         result = recheck_topup_request(topup_request)
 
-        self.assertIsNone(result)
+        self.assertNotEqual(result.status, TopUpRequest.STATUS_DONE)
 
 
 

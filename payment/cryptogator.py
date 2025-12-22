@@ -123,7 +123,7 @@ def _commit_topup(topup_request: TopUpRequest, amount: Decimal, blockchain_trx_i
     topup_request.blockchain_trx_id = blockchain_trx_id
     topup_request.topup_transaction = topup_transaction
 
-    topup_request.save()
+    topup_request.save(update_fields=['amount', 'status', 'blockchain_trx_id', 'topup_transaction'])
 
 
 def webhook(post_data: str, topup_request_id: str):
@@ -214,56 +214,81 @@ def recheck_topup_request(topup_request: TopUpRequest):
 
     http_method = 'GET'
     http_function = '/v2/platforms/unified-orders'
-    timestamp = int(time.time())
-    data = {
-        "fromDate": f"{date_from}",
-        "toDate": f"{date_to}",
-        "itemsPerPage": "1000",
-    }
 
-    #print(data)
+    page_number = 0
+    while True:
+        timestamp = int(time.time())
+        data = {
+            "fromDate": f"{date_from}",
+            "toDate": f"{date_to}",
+            "limit": "100",
+            "page": f"{str(page_number)}",
+        }
 
-    headers = {
-        "X-Api-Key": PAYMENT_GATEWAY_CRYPTOGATOR_API_KEY,
-        "X-Signature": sign(timestamp, http_method, http_function, data),
-        "X-Timestamp": f"{timestamp}",
-        "Content-Type": "application/json"
-    }
+        #print(data)
 
-    url = f"{PAYMENT_GATEWAY_CRYPTOGATOR_BASE_URL_PARTNER}{http_function}"
-    #print(f"url: {url}")
-    response = requests.get(url, headers=headers, params=data, json=data)
-    if response.status_code != 200:
-        logger.error(f"status code: {response.status_code} | {response.text}")
-        raise Exception(f"Repsonse code {response.status_code} ({payment_types.GATEWAY_CRYPTOGATOR}) {http_function}")
+        headers = {
+            "X-Api-Key": PAYMENT_GATEWAY_CRYPTOGATOR_API_KEY,
+            "X-Signature": sign(timestamp, http_method, http_function, data),
+            "X-Timestamp": f"{timestamp}",
+            "Content-Type": "application/json"
+        }
 
-    try:
-        data = json.loads(response.text)
-        content = data['content']
-        for item in content:
-            uuid = item.get('uuid')
-            amount = item.get('receivedAmount')
-            if amount is None:
-                continue
-            amount = Decimal(amount)
-
-            currency = item.get("currency")
-            status = item.get('status')
-
-            if topup_request.payment_gateway_settings__currency != currency:
-                continue
-
-            if topup_request.payment_gateway_transaction_id != uuid:
-                continue
-
-            if status == 'DONE':
-                _commit_topup(topup_request, amount, '--')
-                return topup_request
+        url = f"{PAYMENT_GATEWAY_CRYPTOGATOR_BASE_URL_PARTNER}{http_function}"
+        #print(f"url: {url}")
+        response = requests.get(url, headers=headers, params=data, json=data)
+        if response.status_code != 200:
+            logger.error(f"status code: {response.status_code} | {response.text}")
+            raise Exception(f"Repsonse code {response.status_code} ({payment_types.GATEWAY_CRYPTOGATOR}) {http_function}")
 
 
-    except ValueError as e:
-        logger.error(f"Can't parse json {str(e)}")
-        raise Exception(f"{payment_types.GATEWAY_CRYPTOGATOR} JSON error {str(e)}")
+        try:
+            data = json.loads(response.text)
+            response_page_number = int(data['pageNumber'])
+            response_total_pages = int(data['totalPages'])
+
+            #print(f"current page: {page_number} response: {response_page_number} total {response_total_pages}")
+
+            content = data['content']
+
+
+            for item in content:
+                uuid = item.get('uuid')
+                #print(f"uui: {uuid} ({topup_request.payment_gateway_transaction_id})")
+                amount = item.get('receivedAmount')
+                if amount is None:
+                    #print(f"skip")
+                    continue
+                amount = Decimal(amount)
+
+                currency = item.get("currency")
+                status = item.get('status')
+
+                #print(f"check {topup_request.payment_gateway_settings__currency} == {currency} && {topup_request.payment_gateway_transaction_id} == {uuid}")
+
+                if topup_request.payment_gateway_settings__currency != currency:
+                    #print(f'skip')
+                    continue
+
+                if topup_request.payment_gateway_transaction_id != uuid:
+                    #print(f'skip')
+                    continue
+
+                if status == 'DONE':
+                    #print(f"!FOUND")
+                    _commit_topup(topup_request, amount, '--')
+                    return topup_request
+
+                #print(f"skip")
+
+        except ValueError as e:
+            logger.error(f"Can't parse json {str(e)}")
+            raise Exception(f"{payment_types.GATEWAY_CRYPTOGATOR} JSON error {str(e)}")
+
+        if response_page_number + 1 >= response_total_pages:
+            break
+
+        page_number += 1
 
 
     return topup_request
