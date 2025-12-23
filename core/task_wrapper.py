@@ -1,6 +1,6 @@
 from logging import Logger
 
-from core.models import SubSiteProject, MyTask, ImageAIEditConversation
+from core.models import SubSiteProject, MyTask, ImageAIEditConversation, AI_TYPE_CHOICES
 from core.log import *
 logger.setLevel(logging.DEBUG)
 

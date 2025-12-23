@@ -9,27 +9,27 @@ from core.tools import get_image_path_for_user
 import payment.types as payment_types
 
 
-TYPE_CHATGPT = 'CHATGPT'
-TYPE_DEEPSEEK = 'DEEPSEEK'
+AI_TYPE_CHATGPT = 'CHATGPT'
+AI_TYPE_DEEPSEEK = 'DEEPSEEK'
 
-TYPE_CHOICES = (
-    (TYPE_CHATGPT, TYPE_CHATGPT),
-    (TYPE_DEEPSEEK, TYPE_DEEPSEEK),
+AI_TYPE_CHOICES = (
+    (AI_TYPE_CHATGPT, AI_TYPE_CHATGPT),
+    (AI_TYPE_DEEPSEEK, AI_TYPE_DEEPSEEK),
 )
 
-MODEL_CHATGPT_5 = 'gpt-5'
-MODEL_CHATGPT_5_1 = 'gpt-5.1'
-MODEL_CHATGPT_4O = 'gpt-4o'
-MODEL_CHATGPT_IMG_1 = 'gpt-image-1'
-MODEL_DEEP_SEEK_CHAT = 'deepseek-chat'
-MODEL_DEEP_SEEK_REASONER = 'deepseek-reasoner'
-MODEL_CHOICES = (
-    (MODEL_CHATGPT_5, MODEL_CHATGPT_5),
-    (MODEL_CHATGPT_5_1, MODEL_CHATGPT_5_1),
-    (MODEL_CHATGPT_4O, MODEL_CHATGPT_4O),
-    (MODEL_CHATGPT_IMG_1, MODEL_CHATGPT_IMG_1),
-    (MODEL_DEEP_SEEK_CHAT, MODEL_DEEP_SEEK_CHAT),
-    (MODEL_DEEP_SEEK_REASONER, MODEL_DEEP_SEEK_REASONER),
+AI_MODEL_CHATGPT_5 = 'gpt-5'
+AI_MODEL_CHATGPT_5_1 = 'gpt-5.1'
+AI_MODEL_CHATGPT_4O = 'gpt-4o'
+AI_MODEL_CHATGPT_IMG_1 = 'gpt-image-1'
+AI_MODEL_DEEP_SEEK_CHAT = 'deepseek-chat'
+AI_MODEL_DEEP_SEEK_REASONER = 'deepseek-reasoner'
+AI_MODEL_CHOICES = (
+    (AI_MODEL_CHATGPT_5, AI_MODEL_CHATGPT_5),
+    (AI_MODEL_CHATGPT_5_1, AI_MODEL_CHATGPT_5_1),
+    (AI_MODEL_CHATGPT_4O, AI_MODEL_CHATGPT_4O),
+    (AI_MODEL_CHATGPT_IMG_1, AI_MODEL_CHATGPT_IMG_1),
+    (AI_MODEL_DEEP_SEEK_CHAT, AI_MODEL_DEEP_SEEK_CHAT),
+    (AI_MODEL_DEEP_SEEK_REASONER, AI_MODEL_DEEP_SEEK_REASONER),
 )
 
 
@@ -273,8 +273,8 @@ class SystemPrompts(models.Model):
 
 class AICommunicationLog(models.Model):
     task = models.ForeignKey(MyTask, on_delete=models.CASCADE, related_name="log")
-    ai_type = models.CharField(max_length=20, choices=TYPE_CHOICES, null=True, blank=True, default=None)
-    ai_model = models.CharField(max_length=20, choices=MODEL_CHOICES, null=True, blank=True, default=None)
+    ai_type = models.CharField(max_length=20, choices=AI_TYPE_CHOICES, null=True, blank=True, default=None)
+    ai_model = models.CharField(max_length=20, choices=AI_MODEL_CHOICES, null=True, blank=True, default=None)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     prompt = models.TextField()
@@ -297,8 +297,8 @@ class AIModelsSettings(models.Model):
         (FORMAT_IMAGE, FORMAT_IMAGE),
     )
 
-    type = models.CharField(max_length=20, choices=TYPE_CHOICES)
-    model = models.CharField(max_length=20, choices=MODEL_CHOICES)
+    type = models.CharField(max_length=20, choices=AI_TYPE_CHOICES)
+    model = models.CharField(max_length=20, choices=AI_MODEL_CHOICES)
     format = models.CharField(max_length=20, choices=FORMAT_CHOICES)
 
     prompt_tokens_price_1m = models.DecimalField(max_digits=14, decimal_places=2, default=0)

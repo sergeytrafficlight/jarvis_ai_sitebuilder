@@ -8,7 +8,6 @@ import urllib.parse
 from bs4 import BeautifulSoup
 from playwright.sync_api import sync_playwright
 
-from core.models import TYPE_CHOICES
 from core.tools import is_valid_http_url
 from core.log import *
 

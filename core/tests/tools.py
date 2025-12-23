@@ -52,6 +52,25 @@ def create_profile():
     return get_profile(u)
 
 
+def create_site(p: Profile):
+    site = SiteProject.objects.create(
+        user=p.user,
+        name=get_uniq_id(),
+    )
+    return site
+
+def create_sub_site(site: SiteProject):
+    full_path, uniq_dir = generate_uniq_subsite_dir_for_site(site)
+
+    sub_site = SubSiteProject.objects.create(
+        site=site,
+        root_sub_site=None,
+        dir=uniq_dir,
+    )
+
+    return sub_site
+
+
 def view_topup_create(p: Profile, currency: str, method: str):
 
     u = FakeUser(

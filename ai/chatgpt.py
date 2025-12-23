@@ -6,8 +6,8 @@ from openai import OpenAI, APITimeoutError
 from config import AI_PROXY, CHATGPT_API_KEY, CHATGPT_API_KEY_ADMIN, CHATGPT_PROJECT_ID
 from ai.ai_answer import ai_answer
 from core.models import AIModelsSettings
-from core.models import MODEL_CHATGPT_5_1, MODEL_CHATGPT_IMG_1, MODEL_CHATGPT_5, MODEL_CHATGPT_4O
-from core.models import TYPE_CHATGPT
+from core.models import AI_MODEL_CHATGPT_5_1, AI_MODEL_CHATGPT_IMG_1, AI_MODEL_CHATGPT_5, AI_MODEL_CHATGPT_4O
+from core.models import AI_TYPE_CHATGPT
 import math
 from PIL import Image
 from io import BytesIO
