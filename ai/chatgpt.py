@@ -7,7 +7,7 @@ from config import AI_PROXY, CHATGPT_API_KEY, CHATGPT_API_KEY_ADMIN, CHATGPT_PRO
 from ai.ai_answer import ai_answer
 from core.models import AIModelsSettings
 from core.models import AI_MODEL_CHATGPT_5_1, AI_MODEL_CHATGPT_IMG_1, AI_MODEL_CHATGPT_5, AI_MODEL_CHATGPT_4O
-from core.models import AI_TYPE_CHATGPT
+from core.models import AI_ENGINE_CHATGPT
 import math
 from PIL import Image
 from io import BytesIO
@@ -82,11 +82,11 @@ def get_text_img2text_answer(prompt: str, img_path:str, creative_enabled=False) 
                 ".jpeg") else "image/png"
             image_data_url = f"data:{mime_type};base64,{image_base64}"
         img_tokens = calculate_gpt5_image_tokens(img_path)
-        model = MODEL_CHATGPT_4O
-        ai_settings = AIModelsSettings.objects.get(type=TYPE_CHATGPT, model=model, format=AIModelsSettings.FORMAT_IMAGE)
+        model = AI_MODEL_CHATGPT_4O
+        ai_settings = AIModelsSettings.objects.get(engine=AI_ENGINE_CHATGPT, model=model, format=AIModelsSettings.FORMAT_IMAGE)
     else:
-        model = MODEL_CHATGPT_5_1
-        ai_settings = AIModelsSettings.objects.get(type=TYPE_CHATGPT, model=model, format=AIModelsSettings.FORMAT_TXT)
+        model = AI_MODEL_CHATGPT_5_1
+        ai_settings = AIModelsSettings.objects.get(engine=AI_ENGINE_CHATGPT, model=model, format=AIModelsSettings.FORMAT_TXT)
         image_data_url = None
 
     if creative_enabled:
@@ -149,9 +149,9 @@ def get_text2img_answer(
     input_image_path: str,
     creative_enabled=False,
 ):
-    model = MODEL_CHATGPT_IMG_1
+    model = AI_MODEL_CHATGPT_IMG_1
 
-    ai_settings = AIModelsSettings.objects.get(type=TYPE_CHATGPT, model=model, format=AIModelsSettings.FORMAT_IMAGE)
+    ai_settings = AIModelsSettings.objects.get(engine=AI_ENGINE_CHATGPT, model=model, format=AIModelsSettings.FORMAT_IMAGE)
 
     if len(AI_PROXY):
         http_client =  httpx.Client(
@@ -201,14 +201,14 @@ def get_edit_image_conversation(prompt: str, input_image_path:str, last_answer_i
 
     logger.debug(f"input image: {input_image_path}")
 
-    model = MODEL_CHATGPT_5
+    model = AI_MODEL_CHATGPT_5
 
     if input_image_path:
         prompt_input_tokens = calculate_gpt5_image_tokens(input_image_path)
     else:
         prompt_input_tokens = 0
 
-    ai_settings = AIModelsSettings.objects.get(type=TYPE_CHATGPT, model=model, format=AIModelsSettings.FORMAT_IMAGE)
+    ai_settings = AIModelsSettings.objects.get(engine=AI_ENGINE_CHATGPT, model=model, format=AIModelsSettings.FORMAT_IMAGE)
 
     if len(AI_PROXY):
         http_client = httpx.Client(

@@ -1,11 +1,13 @@
 import json
+import os
 from django.urls import reverse
+from django.db import connection
 from urllib.parse import urlparse, parse_qs
 
 from django.contrib.auth.models import User
 from django.test import Client, TestCase
 import payment.types as payment_types
-from core.models import PaymentGatewaySettings, Profile, get_profile, TopUpRequest, SiteProject, SubSiteProject
+from core.models import PaymentGatewaySettings, Profile, get_profile, TopUpRequest, SiteProject, SubSiteProject, AIModelsSettings
 from core.tools import generate_uniq_subsite_dir_for_site
 import sitebuilder.settings
 
@@ -69,6 +71,14 @@ def create_sub_site(site: SiteProject):
     )
 
     return sub_site
+
+def create_ai_model_settings(engine: str, model: str = '', format: str = ''):
+
+    return AIModelsSettings.objects.create(
+        engine=engine,
+        model=model,
+        format=format,
+    )
 
 
 def view_topup_create(p: Profile, currency: str, method: str):
@@ -229,5 +239,15 @@ def compare_dicts(d1, d2):
 
     return True, "OK"
 
+
+def restore_ai_settings():
+    sql_path = os.path.join(os.path.dirname(__file__), '../../ai_settings.sql')
+    with open(sql_path, 'r') as f:
+        sql_statements = f.read()
+    with connection.cursor() as cursor:
+        for statement in sql_statements.split(';'):
+            statement = statement.strip()
+            if statement:
+                cursor.execute(statement)
 
 

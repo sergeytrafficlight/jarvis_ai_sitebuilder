@@ -1,15 +1,17 @@
 from logging import Logger
 
-from core.models import SubSiteProject, MyTask, ImageAIEditConversation, AI_TYPE_CHOICES
+from ai.ai import ai_processor_get_default_config
+from core.models import SubSiteProject, MyTask, ImageAIEditConversation
 from core.log import *
 logger.setLevel(logging.DEBUG)
 
 
-def task_generate_site_name_classification(sub_site: SubSiteProject):
+def task_generate_site_name_classification(sub_site: SubSiteProject, engine_cfg = ai_processor_get_default_config()):
 
     return MyTask.objects.create(
         sub_site=sub_site,
         type=MyTask.TYPE_GENERATE_NAME,
+        ai_engine_config=engine_cfg,
     )
 
 def task_generate_site(sub_site: SubSiteProject, prompt: str):

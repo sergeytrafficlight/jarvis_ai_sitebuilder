@@ -44,8 +44,8 @@ class AICommunicationLogAdmin(admin.ModelAdmin):
 
 @admin.register(AIModelsSettings)
 class AIModelsSettingsAdmin(admin.ModelAdmin):
-  list_display = ("type", "model", "prompt_tokens_price_1m", "completion_tokens_price_1m", "my_margin")
-  search_fields = ("type", "model")
+  list_display = ("engine", "model", "prompt_tokens_price_1m", "completion_tokens_price_1m", "my_margin")
+  search_fields = ("engine", "model")
   list_filter = ()
 
   @admin.register(MyTask)

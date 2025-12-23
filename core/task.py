@@ -5,7 +5,7 @@ import requests
 import threading
 from bs4 import BeautifulSoup
 from celery import shared_task, Task
-from ai.ai import ai_log, ai_log_update
+from ai.ai import ai_log, ai_log_update, ai_processor_get_default_config
 from core.models import SiteProject, MyTask, SystemPrompts, SubSiteProject, ImageAIEditConversation, ImageAIEdit, get_profile
 from ai.ai import get_text_img2text_answer, get_text2img_answer, get_edit_image_conversation
 from core.tools import get_subsite_dir, extract_json_from_text
@@ -44,6 +44,11 @@ class BaseTask(Task):
 
 def run_task_generate_name(task: MyTask):
 
+    ai_engine_cfg = task.ai_engine_config
+    if not ai_engine_cfg:
+        ai_engine_cfg = ai_processor_get_default_config()
+
+
     prompt = SystemPrompts.objects.get(type=SystemPrompts.SP_NAME_BASE).prompt
     prompt += "\n"
     prompt += SystemPrompts.objects.get(type=SystemPrompts.SP_NAME_CLASSIFICATION).prompt
@@ -55,7 +60,7 @@ def run_task_generate_name(task: MyTask):
     logger.debug(f'Generate site name')
     log = ai_log(task, prompt)
 
-    answer = get_text_img2text_answer(prompt, creative_enabled=True)
+    answer = get_text_img2text_answer(prompt, creative_enabled=True, engine_cfg=ai_engine_cfg)
 
     ai_log_update(log, answer)
 

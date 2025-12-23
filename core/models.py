@@ -9,12 +9,12 @@ from core.tools import get_image_path_for_user
 import payment.types as payment_types
 
 
-AI_TYPE_CHATGPT = 'CHATGPT'
-AI_TYPE_DEEPSEEK = 'DEEPSEEK'
+AI_ENGINE_CHATGPT = 'CHATGPT'
+AI_ENGINE_DEEPSEEK = 'DEEPSEEK'
 
-AI_TYPE_CHOICES = (
-    (AI_TYPE_CHATGPT, AI_TYPE_CHATGPT),
-    (AI_TYPE_DEEPSEEK, AI_TYPE_DEEPSEEK),
+AI_ENGINE_CHOICES = (
+    (AI_ENGINE_CHATGPT, AI_ENGINE_CHATGPT),
+    (AI_ENGINE_DEEPSEEK, AI_ENGINE_DEEPSEEK),
 )
 
 AI_MODEL_CHATGPT_5 = 'gpt-5'
@@ -170,6 +170,12 @@ class MyTask(models.Model):
         null=True
     )
 
+    ai_engine_config = models.JSONField(
+        default=dict,
+        blank=True,
+        null=True
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -273,7 +279,7 @@ class SystemPrompts(models.Model):
 
 class AICommunicationLog(models.Model):
     task = models.ForeignKey(MyTask, on_delete=models.CASCADE, related_name="log")
-    ai_type = models.CharField(max_length=20, choices=AI_TYPE_CHOICES, null=True, blank=True, default=None)
+    ai_engine = models.CharField(max_length=20, choices=AI_ENGINE_CHOICES, null=True, blank=True, default=None)
     ai_model = models.CharField(max_length=20, choices=AI_MODEL_CHOICES, null=True, blank=True, default=None)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -297,7 +303,7 @@ class AIModelsSettings(models.Model):
         (FORMAT_IMAGE, FORMAT_IMAGE),
     )
 
-    type = models.CharField(max_length=20, choices=AI_TYPE_CHOICES)
+    engine = models.CharField(max_length=20, choices=AI_ENGINE_CHOICES)
     model = models.CharField(max_length=20, choices=AI_MODEL_CHOICES)
     format = models.CharField(max_length=20, choices=FORMAT_CHOICES)
 
@@ -307,7 +313,7 @@ class AIModelsSettings(models.Model):
 
     class Meta:
         unique_together = [
-            ("type", "model"),
+            ("engine", "model"),
         ]
 
 class PaymentGatewaySettings(models.Model):
