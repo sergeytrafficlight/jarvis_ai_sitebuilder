@@ -69,7 +69,7 @@ def ai_log(task: MyTask, prompt: str):
 
 def ai_log_update(log: AICommunicationLog, answer: ai_answer):
     log.answer = answer.answer
-    log.type = answer.type
+    log.ai_engine = answer.engine
     log.model = answer.model
     log.prompt_tokens = answer.prompt_tokens
     log.completion_tokens = answer.completion_tokens

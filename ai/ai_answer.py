@@ -12,13 +12,13 @@ def _get_price_for_ai(ai_settings, prompt_tokens, completion_tokens):
 
 def _get_price_for_client(ai_settings, prompt_tokens, completion_tokens):
     mutliplyer = Decimal(str(ai_settings.my_margin))
-    return _get_price_for_ai(ai_settings, prompt_tokens, completion_tokens) * mutliplyer
+    return Decimal(_get_price_for_ai(ai_settings, prompt_tokens, completion_tokens)) * mutliplyer
 
 
 class ai_answer:
 
     def __init__(self, ai_settings: AIModelsSettings, answer, prompt_tokens, completion_tokens, response_id = None, comment = ''):
-        self.type = ai_settings.type
+        self.engine = ai_settings.engine
         self.model = ai_settings.model
         self.answer = answer
         self.prompt_tokens = prompt_tokens

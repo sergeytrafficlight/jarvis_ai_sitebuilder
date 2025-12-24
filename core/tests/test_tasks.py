@@ -3,6 +3,7 @@ from core.task_wrapper import task_generate_site_name_classification
 from core.tests.tools import create_profile, create_site, create_sub_site, create_ai_model_settings
 from ai.ai import ai_processor_register, ai_processor_get_default_config, AI_TYPE_PROCESSOR_TXT_IMG_2_TXT
 from ai.ai import ai_answer
+from decimal import Decimal
 from core.task import run_tasks_ex
 from core.tests.tools import restore_ai_settings
 
@@ -24,7 +25,6 @@ class TasksGenerateSiteNameTest(TestCase):
                 prompt_tokens=0,
                 completion_tokens=0,
             )
-
             return answer
 
 

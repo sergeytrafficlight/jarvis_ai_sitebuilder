@@ -8,6 +8,7 @@ from django.contrib.auth.models import User
 from django.test import Client, TestCase
 import payment.types as payment_types
 from core.models import PaymentGatewaySettings, Profile, get_profile, TopUpRequest, SiteProject, SubSiteProject, AIModelsSettings
+from core.models import AI_ENGINE_CHATGPT, AI_MODEL_CHATGPT_5
 from core.tools import generate_uniq_subsite_dir_for_site
 import sitebuilder.settings
 
@@ -79,6 +80,10 @@ def create_ai_model_settings(engine: str, model: str = '', format: str = ''):
         model=model,
         format=format,
     )
+
+def get_ai_model_settings_test():
+
+    return AIModelsSettings.objects.get(engine=AI_ENGINE_CHATGPT, model=AI_MODEL_CHATGPT_5)
 
 
 def view_topup_create(p: Profile, currency: str, method: str):

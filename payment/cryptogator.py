@@ -118,12 +118,11 @@ def _commit_topup(topup_request: TopUpRequest, amount: Decimal, blockchain_trx_i
         description=f'trx id: {blockchain_trx_id}, topup request id: {topup_request.id}'
     )
 
-    topup_request.amount = amount
     topup_request.status = TopUpRequest.STATUS_DONE
     topup_request.blockchain_trx_id = blockchain_trx_id
     topup_request.topup_transaction = topup_transaction
 
-    topup_request.save(update_fields=['amount', 'status', 'blockchain_trx_id', 'topup_transaction'])
+    topup_request.save(update_fields=['status', 'blockchain_trx_id', 'topup_transaction'])
 
 
 def webhook(post_data: str, topup_request_id: str):
@@ -266,7 +265,7 @@ def recheck_topup_request(topup_request: TopUpRequest):
 
                 #print(f"check {topup_request.payment_gateway_settings__currency} == {currency} && {topup_request.payment_gateway_transaction_id} == {uuid}")
 
-                if topup_request.payment_gateway_settings__currency != currency:
+                if topup_request.payment_gateway_settings.currency != currency:
                     #print(f'skip')
                     continue
 
