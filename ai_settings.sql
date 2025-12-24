@@ -25,14 +25,14 @@ DROP TABLE IF EXISTS `core_aimodelssettings`;
 /*!40101 SET character_set_client = utf8mb4 */;
 CREATE TABLE `core_aimodelssettings` (
   `id` bigint(20) NOT NULL AUTO_INCREMENT,
-  `type` varchar(20) NOT NULL,
+  `engine` varchar(20) NOT NULL,
   `model` varchar(20) NOT NULL,
   `prompt_tokens_price_1m` decimal(14,2) NOT NULL,
   `completion_tokens_price_1m` decimal(14,2) NOT NULL,
   `my_margin` double NOT NULL,
   `format` varchar(20) NOT NULL,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `core_aimodelssettings_type_model_7411591e_uniq` (`type`,`model`)
+  UNIQUE KEY `core_aimodelssettings_type_model_7411591e_uniq` (`engine`,`model`)
 ) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -122,4 +122,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*M!100616 SET NOTE_VERBOSITY=@OLD_NOTE_VERBOSITY */;
 
--- Dump completed on 2025-11-27 19:29:44
+-- Dump completed on 2025-12-24 10:31:19
