@@ -5,9 +5,9 @@ from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.utils.translation import gettext_lazy as _
 from django.core.validators import MinValueValidator
+from django.core.exceptions import ValidationError
 from core.tools import get_image_path_for_user
 import payment.types as payment_types
-
 
 AI_ENGINE_CHATGPT = 'CHATGPT'
 AI_ENGINE_DEEPSEEK = 'DEEPSEEK'
@@ -56,20 +56,35 @@ class Transaction(models.Model):
     )
 
     user = models.ForeignKey(User, on_delete=models.PROTECT, related_name="transactions")
+    topup_request = models.OneToOneField('TopUpRequest', on_delete=models.PROTECT, related_name="transactions", null=True, blank=True)
     amount_client = models.DecimalField(max_digits=10, decimal_places=6)
     amount_ai = models.DecimalField(max_digits=10, decimal_places=6)
     type = models.CharField(max_length=10, choices=TYPE_CHOICES)
     description = models.CharField(max_length=255, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
-
     sub_site = models.ForeignKey('SubSiteProject', on_delete=models.SET_NULL, null=True, blank=True, default=None, related_name="transactions")
+
 
     class Meta:
         ordering = ["-created_at"]
 
     def __str__(self):
-
         return f"{self.user.email} {self.created_at:%Y-%m-%d}"
+
+    def clean(self):
+        if self.pk:
+            if self.type == Transaction.TYPE_TOPUP:
+                if self.topup_request_id is None:
+                    raise ValidationError(f"topup_request is None")
+
+
+
+    def save(self, *args, **kwargs):
+        # Вызываем clean перед сохранением
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+
 
 class TopUpRequest(models.Model):
 
@@ -109,16 +124,30 @@ class TopUpRequest(models.Model):
 
     user = models.ForeignKey(User, on_delete=models.PROTECT, related_name="topup_request")
     status = models.CharField(max_length=10, choices=STATUS_CHOICES)
-    wallet_to_pay_address = models.CharField(max_length=255, null=True)
-    expired_at = models.DateTimeField(null=True)
-    amount_min_for_order = models.DecimalField(max_digits=10, decimal_places=6, null=True)
-    payment_gateway_transaction_id = models.CharField(max_length=256, null=True)
-    blockchain_trx_id = models.CharField(max_length=256, null=True)
-    topup_transaction = models.ForeignKey(Transaction, on_delete=models.PROTECT, related_name='topup_request', null=True)
+    wallet_to_pay_address = models.CharField(max_length=255, null=True, blank=True)
+    expired_at = models.DateTimeField(null=True, blank=True)
+    amount_min_for_order = models.DecimalField(max_digits=10, decimal_places=6, null=True, blank=True)
+    payment_gateway_transaction_id = models.CharField(max_length=256, null=True, blank=True)
+    blockchain_trx_id = models.CharField(max_length=256, null=True, blank=True)
+    topup_transaction = models.OneToOneField(Transaction, on_delete=models.PROTECT, related_name='topup_transaction_link', null=True, blank=True)
     payment_gateway_settings = models.ForeignKey('PaymentGatewaySettings', on_delete=models.PROTECT, related_name='topup_request')
 
     created_at = models.DateTimeField(auto_now_add=True)
 
+
+    def clean(self):
+        if self.status == TopUpRequest.STATUS_DONE:
+            if TopUpRequest.objects.filter(
+                blockchain_trx_id=self.blockchain_trx_id,
+                status=TopUpRequest.STATUS_DONE,
+            ).exists():
+                raise ValidationError(f"Duplicate status Done for trx id: {self.blockchain_trx_id}")
+
+
+    def save(self, *args, **kwargs):
+        # Вызываем clean перед сохранением
+        self.full_clean()
+        super().save(*args, **kwargs)
 
 
 

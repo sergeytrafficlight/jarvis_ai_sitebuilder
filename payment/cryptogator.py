@@ -115,8 +115,10 @@ def _commit_topup(topup_request: TopUpRequest, amount: Decimal, blockchain_trx_i
     topup_transaction = funds_balance.topup(
         user=topup_request.user,
         amount=amount,
-        description=f'trx id: {blockchain_trx_id}, topup request id: {topup_request.id}'
+        description=f'trx id: {blockchain_trx_id}, topup request id: {topup_request.id}',
+        #topup_request=topup_request,
     )
+
 
     topup_request.status = TopUpRequest.STATUS_DONE
     topup_request.blockchain_trx_id = blockchain_trx_id
@@ -275,7 +277,7 @@ def recheck_topup_request(topup_request: TopUpRequest):
 
                 if status == 'DONE':
                     #print(f"!FOUND")
-                    _commit_topup(topup_request, amount, '--')
+                    _commit_topup(topup_request, amount, uuid)
                     return topup_request
 
                 #print(f"skip")
