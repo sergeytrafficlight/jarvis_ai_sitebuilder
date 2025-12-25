@@ -72,12 +72,12 @@ def run_task_generate_name(task: MyTask):
     logger.debug(f"Done: {answer.answer}")
 
 
-def run_task_generate_site_parse_answer(task: MyTask, answer: str):
+def run_task_generate_site_parse_answer(task: MyTask, answer: str, ai_engine_cfg):
     dir = get_subsite_dir(task.sub_site)
     logger.debug(f"Dir: {dir}")
-    #logger.debug(f"answer: {answer}")
+    logger.debug(f"answer: {answer}")
     answer_json = extract_json_from_text(answer)
-    #logger.debug(answer_json)
+    logger.debug(answer_json)
 
     result = ProcessFileResult()
     if result.process_file_operations(answer_json, dir):
@@ -91,7 +91,8 @@ def run_task_generate_site_parse_answer(task: MyTask, answer: str):
         if t == ProcessFileResult.File.TYPE_TEXT:
             pass
         elif t == ProcessFileResult.File.TYPE_IMG:
-            task_generate_image(task.sub_site, f.path, f.prompt)
+            logger.debug(f"generate image for prompt: {f.prompt}")
+            task_generate_image(task.sub_site, f.path, f.prompt, engine_cfg=ai_engine_cfg)
         else:
             raise Exception(f"Unknown file type {t}")
 
@@ -100,6 +101,11 @@ def run_task_generate_site_parse_answer(task: MyTask, answer: str):
 def run_task_generate_site(task: MyTask):
 
     logger.debug(f"generate site strucutre")
+
+    ai_engine_cfg = task.ai_engine_config
+    if not ai_engine_cfg:
+        ai_engine_cfg = ai_processor_get_default_config()
+
 
     payload = task.data_payload
     user_prompt = payload['prompt']
@@ -112,7 +118,7 @@ def run_task_generate_site(task: MyTask):
 
     log = ai_log(task, prompt)
 
-    answer = get_text_img2text_answer(prompt=prompt)
+    answer = get_text_img2text_answer(prompt=prompt, engine_cfg=ai_engine_cfg)
     logger.debug(f"done")
 
     logger.debug(f"Dir {dir}")
@@ -120,7 +126,7 @@ def run_task_generate_site(task: MyTask):
     charge(task.sub_site, answer, task.type)
     ai_log_update(log, answer)
 
-    run_task_generate_site_parse_answer(task, answer.answer)
+    run_task_generate_site_parse_answer(task, answer.answer, ai_engine_cfg)
 
 def run_task_copy_site_by_url(task: MyTask):
 
@@ -146,6 +152,10 @@ def run_task_copy_site_by_url(task: MyTask):
 
 
 def run_task_edit_file(task: MyTask):
+
+    ai_engine_cfg = task.ai_engine_config
+    if not ai_engine_cfg:
+        ai_engine_cfg = ai_processor_get_default_config()
 
     payload = task.data_payload
     user_prompt = payload['prompt']
@@ -183,7 +193,7 @@ def run_task_edit_file(task: MyTask):
     log = ai_log(task, prompt)
 
     logger.debug(f"edit_file")
-    answer = get_text_img2text_answer(prompt)
+    answer = get_text_img2text_answer(prompt, engine_cfg=ai_engine_cfg)
     logger.debug(f"done")
 
     logger.debug(f"Dir {dir}")
@@ -200,6 +210,9 @@ def run_task_geneate_image(task: MyTask):
 
     logger.debug(f"generate image, task: {task.id}")
     #logger.debug(f"payload: {task.data_payload}")
+    ai_engine_cfg = task.ai_engine_config
+    if not ai_engine_cfg:
+        ai_engine_cfg = ai_processor_get_default_config()
 
     if not task.data_payload:
         raise Exception(f"Empty data payload")
@@ -256,7 +269,7 @@ def run_task_geneate_image(task: MyTask):
     prompt += f"\nпуть к файлу: {file_path}"
 
     log = ai_log(task, prompt)
-    answer = get_edit_image_conversation(prompt=prompt,input_image=screenshot_path, last_answer_id=None)
+    answer = get_edit_image_conversation(prompt=prompt,input_image=screenshot_path, last_answer_id=None, engine_cfg=ai_engine_cfg)
     file_path = get_subsite_dir(task.sub_site) + "/" + file_path
     with open(file_path, "wb") as f:
         f.write(answer.answer)
@@ -268,6 +281,10 @@ def run_task_edit_image(task: MyTask):
 
     logger.debug(f"edit image, task: {task.id}")
     #logger.debug(f"payload: {task.data_payload}")
+
+    ai_engine_cfg = task.ai_engine_config
+    if not ai_engine_cfg:
+        ai_engine_cfg = ai_processor_get_default_config()
 
     conv = ImageAIEditConversation.objects.get(task=task)
     img_db = conv.image_ai_edit
@@ -298,7 +315,7 @@ def run_task_edit_image(task: MyTask):
     file_path_to_ai = None
     if os.path.isfile(full_path):
         file_path_to_ai = full_path
-    answer = get_edit_image_conversation(prompt, file_path_to_ai, prev_answer_id)
+    answer = get_edit_image_conversation(prompt, file_path_to_ai, prev_answer_id, engine_cfg=ai_engine_cfg)
 
     conv.answer_id = answer.response_id
     conv.save(update_fields=['answer_id'])
@@ -312,6 +329,9 @@ def run_task_edit_image(task: MyTask):
 
 def run_task_edit_site(task: MyTask):
     logger.debug(f"run edit site: {task.id}")
+    ai_engine_cfg = task.ai_engine_config
+    if not ai_engine_cfg:
+        ai_engine_cfg = ai_processor_get_default_config()
 
     user_prompt = task.data_payload['prompt']
     rel_path = task.data_payload['current_rel_path']
@@ -341,7 +361,7 @@ def run_task_edit_site(task: MyTask):
     log = ai_log(task, prompt)
 
 
-    answer = get_text_img2text_answer(prompt)
+    answer = get_text_img2text_answer(prompt, engine_cfg=ai_engine_cfg)
 
     charge(task.sub_site, answer, task.type)
     ai_log_update(log, answer)
@@ -355,7 +375,7 @@ def run_task_edit_site(task: MyTask):
         prompt = t['prompt'] or ''
         file_path = t['file_path'] or ''
         if t['engine'] == 'text2text':
-            task_edit_file(task.sub_site, prompt, file_path)
+            task_edit_file(task.sub_site, prompt, file_path, engine_cfg=ai_engine_cfg)
         elif t['engine'] == 'text2img':
             image, _ = ImageAIEdit.objects.get_or_create(sub_site=task.sub_site, file_path=file_path)
             conv = ImageAIEditConversation.objects.create(
@@ -363,7 +383,7 @@ def run_task_edit_site(task: MyTask):
                 prompt=prompt,
                 task=task,
             )
-            task_edit_image(task.sub_site, conv)
+            task_edit_image(task.sub_site, conv, engine_cfg=ai_engine_cfg)
         else:
             raise Exception(f"Unknown task engine {task['engine']}")
 
@@ -391,10 +411,14 @@ class ParallelTasks:
 
 def run_tasks_ex_thread(tasks):
 
+    logger.debug(f"Launch parallel thread")
     while True:
         t = tasks.get_task()
         if not t:
+            logger.debug(f"No tasks. STOP")
             return None
+
+        logger.debug(f"Parallel proceed: {t.type}")
 
         t.status = MyTask.STATUS_PROCESSING
         t.save()
@@ -454,17 +478,20 @@ def run_tasks_ex_cycle(sub_site_id: int):
                 MyTask.TYPE_EDIT_FILE,
                 MyTask.TYPE_EDIT_SITE,
             ]:
+                logger.debug(f"Serial task: {t.type}")
                 task_queue_serial.append(t)
             elif t.type in [
                 MyTask.TYPE_GENERATE_IMAGE,
                 MyTask.TYPE_EDIT_IMAGE,
             ]:
+                logger.debug(f"Parallel task: {t.type}")
                 task_queue_parallel.tasks.append(t)
             else:
                 logger.error("Exception occurred:\n%s", traceback.format_exc())
                 raise Exception(f"Unknown task ({t.id}) type {t.type}")
 
         for t in task_queue_serial:
+            logger.debug(f"Processing serial task {t.type}")
             t.status = MyTask.STATUS_PROCESSING
             t.save()
 
@@ -505,6 +532,7 @@ def run_tasks_ex_cycle(sub_site_id: int):
             threads_count = len(task_queue_parallel.tasks)
 
         threads = []
+        logger.debug(f"Run parallel threads")
         for i in range(threads_count):
             t = threading.Thread(target=run_tasks_ex_thread, args=(task_queue_parallel, ))
             t.start()

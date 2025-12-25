@@ -14,7 +14,7 @@ def task_generate_site_name_classification(sub_site: SubSiteProject, engine_cfg 
         ai_engine_config=engine_cfg,
     )
 
-def task_generate_site(sub_site: SubSiteProject, prompt: str):
+def task_generate_site(sub_site: SubSiteProject, prompt: str, engine_cfg = ai_processor_get_default_config()):
     payload = {
         'prompt': prompt,
     }
@@ -22,9 +22,10 @@ def task_generate_site(sub_site: SubSiteProject, prompt: str):
         sub_site=sub_site,
         type=MyTask.TYPE_GENERATE_SITE,
         data_payload=payload,
+        ai_engine_config=engine_cfg,
     )
 
-def task_copy_site_by_url(sub_site: SubSiteProject, ref_url: str):
+def task_copy_site_by_url(sub_site: SubSiteProject, ref_url: str, engine_cfg = ai_processor_get_default_config()):
     payload = {
         'ref_url': ref_url,
     }
@@ -32,9 +33,10 @@ def task_copy_site_by_url(sub_site: SubSiteProject, ref_url: str):
         sub_site=sub_site,
         type=MyTask.TYPE_COPY_SITE_BY_URL,
         data_payload=payload,
+        ai_engine_config=engine_cfg,
     )
 
-def task_edit_file(sub_site: SubSiteProject, prompt: str, file_path: str):
+def task_edit_file(sub_site: SubSiteProject, prompt: str, file_path: str, engine_cfg = ai_processor_get_default_config()):
     payload = {
         'path': file_path,
         'prompt': prompt,
@@ -43,9 +45,10 @@ def task_edit_file(sub_site: SubSiteProject, prompt: str, file_path: str):
         sub_site=sub_site,
         type=MyTask.TYPE_EDIT_FILE,
         data_payload=payload,
+        ai_engine_config=engine_cfg,
     )
 
-def task_generate_image(sub_site: SubSiteProject, path: str, prompt: str):
+def task_generate_image(sub_site: SubSiteProject, path: str, prompt: str, engine_cfg = ai_processor_get_default_config()):
     payload = {
         'path': path,
         'prompt': prompt,
@@ -54,18 +57,20 @@ def task_generate_image(sub_site: SubSiteProject, path: str, prompt: str):
         sub_site=sub_site,
         type=MyTask.TYPE_GENERATE_IMAGE,
         data_payload=payload,
+        ai_engine_config=engine_cfg,
     )
 
-def task_edit_image(sub_site: SubSiteProject, ai_edit_conversation: ImageAIEditConversation):
+def task_edit_image(sub_site: SubSiteProject, ai_edit_conversation: ImageAIEditConversation, engine_cfg = ai_processor_get_default_config()):
     task = MyTask.objects.create(
         sub_site=sub_site,
         type=MyTask.TYPE_EDIT_IMAGE,
+        ai_engine_config=engine_cfg,
     )
     ai_edit_conversation.task = task
     ai_edit_conversation.save(update_fields=['task'])
     return task
 
-def task_edit_site(sub_site: SubSiteProject, prompt: str, current_url: str = None, current_rel_path: str = None):
+def task_edit_site(sub_site: SubSiteProject, prompt: str, current_url: str = None, current_rel_path: str = None, engine_cfg = ai_processor_get_default_config()):
     payload = {
         'prompt': prompt
     }
@@ -78,6 +83,7 @@ def task_edit_site(sub_site: SubSiteProject, prompt: str, current_url: str = Non
         sub_site=sub_site,
         data_payload=payload,
         type=MyTask.TYPE_EDIT_SITE,
+        ai_engine_config=engine_cfg,
     )
     return task
 
